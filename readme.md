@@ -17,7 +17,7 @@ number = 0 #选课界面会有多个轮次，这里填写你要选的轮次
 
 ## 运行
 ### 获取class_id
-将脚本中的`print(search_class("大学物理",ilist))`，中大学物理改为你的课程名字，从而获取id
+将脚本中的`print(search_class("大学物理",ilist))`，中大学物理改为你的课程名字，并运行该脚本。从而获取id
 ### 运行抢课脚本
 在main.py中修改
 ```
