@@ -160,6 +160,37 @@
             margin-bottom: 15px;
             color: #2e7d32;
         }
+        .toast {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            min-width: 220px;
+            max-width: 350px;
+            z-index: 9999;
+            padding: 16px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s, transform 0.4s;
+            transform: translateY(-20px);
+        }
+        .toast.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+        .toast.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        .toast.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
     </style>
 </head>
 <body>
@@ -167,20 +198,26 @@
         <div class="header">
             <h1>大连理工大学选课系统</h1>
             <div class="status">已从配置文件登录</div>
+            <button onclick="refreshCache()" class="btn-secondary" style="margin-top: 10px;">刷新课程缓存</button>
         </div>
 
         <!-- 主要功能部分 -->
-        <div class="grid">
-            <!-- 搜索课程 -->
-            <div class="section">
-                <h3>搜索课程</h3>
-                <div class="form-group">
-                    <label>课程名称:</label>
-                    <input type="text" id="courseName" placeholder="输入课程名称">
+        <div class="grid">                <!-- 搜索课程 -->
+                <div class="section">
+                    <h3>搜索课程</h3>
+                    <div class="form-group">
+                        <label>课程名称:</label>
+                        <input type="text" id="courseName" placeholder="输入课程名称">
+                    </div>
+                    <div class="form-group">
+                        <label>校区:</label>
+                        <select id="campusSelect">
+                            <option value="">全部校区</option>
+                        </select>
+                    </div>
+                    <button onclick="searchCourse()">搜索</button>
+                    <div id="searchResults"></div>
                 </div>
-                <button onclick="searchCourse()">搜索</button>
-                <div id="searchResults"></div>
-            </div>
 
             <!-- 已选课程 -->
             <div class="section">
@@ -192,23 +229,56 @@
 
         <div id="message"></div>
     </div>
-
+    <div id="toast"></div>
     <script>
-        // 页面加载时自动获取已选课程
+        // 页面加载时自动获取已选课程和校区列表
         window.onload = function() {
             getSelectedCourses();
+            loadCampuses();
         };
 
+        async function loadCampuses() {
+            try {
+                const response = await fetch('/get_campuses');
+                const result = await response.json();
+                if (result.success) {
+                    const select = document.getElementById('campusSelect');
+                    result.campuses.forEach(campus => {
+                        const option = document.createElement('option');
+                        option.value = campus;
+                        option.textContent = campus;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('加载校区失败:', error);
+            }
+        }
+
         function showMessage(text, isError = false) {
-            const messageDiv = document.getElementById('message');
-            messageDiv.innerHTML = `<div class="message ${isError ? 'error' : 'success'}">${text}</div>`;
+            const toast = document.getElementById('toast');
+            toast.className = 'toast ' + (isError ? 'error' : 'success');
+            toast.textContent = text;
+            toast.classList.add('show');
             setTimeout(() => {
-                messageDiv.innerHTML = '';
-            }, 5000);
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        async function refreshCache() {
+            try {
+                const response = await fetch('/refresh_lesson_cache');
+                const result = await response.json();
+                showMessage(result.message, !result.success);
+            } catch (error) {
+                showMessage('刷新缓存失败: ' + error.message, true);
+            }
         }
 
         async function searchCourse() {
             const courseName = document.getElementById('courseName').value;
+            const campus = document.getElementById('campusSelect').value;
+            
             if (!courseName) {
                 showMessage('请输入课程名称', true);
                 return;
@@ -221,7 +291,8 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        course_name: courseName
+                        course_name: courseName,
+                        campus: campus
                     })
                 });
 
@@ -247,8 +318,12 @@
             courses.forEach(course => {
                 html += `
                     <div class="course-item">
-                        <div class="course-name">${course.name}</div>
+                        <div style="display: flex; align-items: baseline; gap: 10px;">
+                            <span class="course-name" style="font-size: 1.2em;">${course.name}</span>
+                            <span class="course-code" style="font-size: 0.9em; color: #888;">${course.code}</span>
+                        </div>
                         <div class="course-info">教师: ${course.teachers}</div>
+                        <div class="course-info">校区: ${course.campus}</div>
                         <div class="course-info">学分: ${course.credits} | 容量: ${course.capacity} | 已选: ${course.selected || '0'}</div>
                         <div class="course-info">课程ID: ${course.id}</div>
                         <div class="course-actions">
@@ -273,7 +348,7 @@
                 });
 
                 const result = await response.json();
-                showMessage(result.message, !result.success);
+                showMessage(result.message,true);
                 if (result.success) {
                     getSelectedCourses();
                 }
@@ -334,9 +409,13 @@
             courses.forEach(course => {
                 html += `
                     <div class="course-item">
-                        <div class="course-name">${course.name}</div>
+                        <div style="display: flex; align-items: baseline; gap: 10px;">
+                            <span class="course-name" style="font-size: 1.2em;">${course.name}</span>
+                            <span class="course-code" style="font-size: 0.9em; color: #888;">${course.code}</span>
+                        </div>
                         <div class="course-info">教师: ${course.teachers}</div>
-                        <div class="course-info">学分: ${course.credits}</div>
+                        <div class="course-info">校区: ${course.campus}</div>
+                        <div class="course-info">学分: ${course.credits} | 已选: ${course.selected || '0'}</div>
                         <div class="course-info">课程ID: ${course.id}</div>
                         <div class="course-actions">
                             <button onclick="dropCourse(${course.id})" class="btn-danger">退课</button>

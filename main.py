@@ -107,14 +107,20 @@ def get_selected_numbers(lesson_ids):
     url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/std-count"
     data = [("lessonIds[]", lid) for lid in lesson_ids]
     r = requests.post(url, data=data, cookies=cookies)
-    print(r.text)
     return json.loads(r.text)
 
 cookies = jw_login()
 stu_id = get_student_id()
 turn_id = get_class_turns(turn_number)
-ilist = get_itemList(turn_id)
-ilist = json.loads(ilist)
+try:
+    with open("ilist.json", "r", encoding="utf-8") as f:
+        ilist = json.load(f)
+except FileNotFoundError:
+    print("ilist.json not found, fetching from server...")
+    ilist = get_itemList(turn_id)
+    ilist = json.loads(ilist)
+    with open("ilist.json", "w", encoding="utf-8") as f:
+        json.dump(ilist, f, ensure_ascii=False, indent=4)
 
 if __name__ == "__main__":
     class_id = 6666 #请将此替换为你要选的class_id

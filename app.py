@@ -15,20 +15,27 @@ def index():
 def search_course():
     try:
         data = request.get_json()
-        course_name = data.get('course_name')
+        course_name = data.get('course_name', '')
+        campus = data.get('campus', '')
         
         # 搜索课程
         result = []
         lesson_ids = []
         for i in ilist:
-            if course_name in i['course']['nameZh']:
+            # 校区筛选
+            course_campus = i.get('campus', {}).get('nameZh', '') if 'campus' in i else ''
+            
+            # 课程名称匹配 + 校区筛选
+            if course_name in i['course']['nameZh'] and (not campus or campus == course_campus):
                 teachers = ', '.join([t['nameZh'] for t in i['teachers']])
                 result.append({
                     "name": i['course']['nameZh'],
+                    "code": i['code'],
                     "id": i['id'],
                     "teachers": teachers,
                     "credits": i['course']['credits'],
                     "capacity": i['limitCount'],
+                    "campus": course_campus
                 })
                 lesson_ids.append(i['id'])
         
@@ -87,18 +94,61 @@ def selected_courses():
         selected = get_selected_classes(turn_id)
         
         courses = []
+        lesson_ids = []
         for course in selected:
             teachers = ', '.join([t['nameZh'] for t in course['teachers']])
+            course_campus = course.get('campus', {}).get('nameZh', '') if 'campus' in course else ''
             courses.append({
                 "name": course['course']['nameZh'],
+                "code": course['code'],
                 "id": course['id'],
                 "teachers": teachers,
-                "credits": course['course']['credits']
+                "credits": course['course']['credits'],
+                "campus": course_campus
             })
+            lesson_ids.append(course['id'])
+        
+        # 获取已选人数
+        if lesson_ids:
+            selected_numbers = get_selected_numbers(lesson_ids)
+            for course in courses:
+                course_id = str(course['id'])
+                if course_id in selected_numbers:
+                    # 格式为"已选人数-候补人数"
+                    selected_info = selected_numbers[course_id]
+                    course['selected'] = selected_info.split('-')[0]  # 只显示已选人数
+                    course['selected_full'] = selected_info  # 完整信息"已选-候补"
+                else:
+                    course['selected'] = '0'
+                    course['selected_full'] = '0-0'
         
         return jsonify({'success': True, 'courses': courses})
     except Exception as e:
         return jsonify({'success': False, 'message': f'获取已选课程失败: {str(e)}'})
+
+
+@app.route('/get_campuses')
+def get_campuses():
+    try:
+        campuses = set()
+        for i in ilist:
+            if 'campus' in i and 'nameZh' in i['campus']:
+                campuses.add(i['campus']['nameZh'])
+        return jsonify({'success': True, 'campuses': sorted(list(campuses))})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取校区失败: {str(e)}'})
+
+@app.route("/refresh_lesson_cache", methods=['GET'])
+def refresh_lesson_cache():
+    try:
+        global ilist
+        ilist = get_itemList(turn_id)  # 重新获取课程列表
+        ilist = json.loads(ilist)
+        with open("ilist.json", "w", encoding="utf-8") as f:
+            json.dump(ilist, f, ensure_ascii=False, indent=4)
+        return jsonify({'success': True, 'message': '课程缓存已刷新'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'刷新课程缓存失败: {str(e)}'})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
