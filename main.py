@@ -103,6 +103,13 @@ def get_selected_classes(turn_Id):
     d = json.loads(r.text)
     return d
 
+def get_selected_numbers(lesson_ids):
+    url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/std-count"
+    data = [("lessonIds[]", lid) for lid in lesson_ids]
+    r = requests.post(url, data=data, cookies=cookies)
+    print(r.text)
+    return json.loads(r.text)
+
 cookies = jw_login()
 stu_id = get_student_id()
 turn_id = get_class_turns(turn_number)
