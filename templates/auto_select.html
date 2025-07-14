@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自动抢课脚本 - 大连理工大学选课系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section {
+            background: white;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section h3 {
+            margin-bottom: 15px;
+            color: #1976d2;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #1976d2;
+        }
+        
+        .btn {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            background: #1565c0;
+        }
+        
+        .btn-danger {
+            background: #d32f2f;
+        }
+        
+        .btn-danger:hover {
+            background: #c62828;
+        }
+        
+        .btn-success {
+            background: #388e3c;
+        }
+        
+        .btn-success:hover {
+            background: #2e7d32;
+        }
+        
+        .btn-warning {
+            background: #f57c00;
+        }
+        
+        .btn-warning:hover {
+            background: #ef6c00;
+        }
+        
+        .operation-list {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-height: 200px;
+            padding: 10px;
+            background: #fafafa;
+        }
+        
+        .operation-item {
+            background: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .operation-item.drop {
+            border-left: 4px solid #d32f2f;
+        }
+        
+        .operation-item.select {
+            border-left: 4px solid #388e3c;
+        }
+        
+        .operation-info {
+            flex: 1;
+        }
+        
+        .operation-type {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .operation-course {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .operation-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .status-display {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            height: 300px;
+            overflow-y: auto;
+        }
+        
+        .status-running {
+            border-color: #388e3c;
+            background: #e8f5e8;
+        }
+        
+        .status-stopped {
+            border-color: #d32f2f;
+            background: #fde8e8;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .search-results {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .course-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        
+        .course-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .course-item.selected {
+            background: #e3f2fd;
+        }
+        
+        .course-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .course-details {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .nav-link {
+            display: inline-block;
+            margin-right: 15px;
+            color: #1976d2;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        
+        .nav-link:hover {
+            background: #e3f2fd;
+        }
+        
+        /* Toast 样式 */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-width: 400px;
+            padding: 15px 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .toast.success {
+            background: linear-gradient(135deg, #4caf50, #45a049);
+        }
+        
+        .toast.error {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+        }
+        
+        .toast.warning {
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+        }
+        
+        .toast.info {
+            background: linear-gradient(135deg, #2196f3, #1976d2);
+        }
+        
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 自动抢课脚本</h1>
+            <p>预设退课和选课操作，程序将按顺序自动执行直到成功</p>
+            <div style="margin-top: 15px;">
+                <a href="/" class="nav-link">返回主页</a>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div>
+                <div class="section">
+                    <h3>📝 添加操作</h3>
+                    <div class="form-group">
+                        <label>操作类型</label>
+                        <select id="operation_type">
+                            <option value="drop">退课</option>
+                            <option value="select">选课</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>搜索课程</label>
+                        <input type="text" id="search_input" placeholder="输入课程名称搜索...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>校区筛选</label>
+                        <select id="campus_filter">
+                            <option value="">所有校区</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn" onclick="searchCourses()">🔍 搜索课程</button>
+                    <button class="btn" onclick="loadSelectedCourses()">📚 加载已选课程</button>
+                    
+                    <div class="search-results" id="search_results">
+                        <div style="text-align: center; padding: 20px; color: #666;">
+                            请搜索课程或加载已选课程
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div class="section">
+                    <h3>📋 操作队列</h3>
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn btn-success" onclick="startAutoScript()">▶️ 开始抢课</button>
+                        <button class="btn btn-warning" onclick="stopAutoScript()">⏸️ 停止抢课</button>
+                        <button class="btn btn-danger" onclick="clearOperations()">🗑️ 清空队列</button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>请求间隔 (秒)</label>
+                        <input type="number" id="interval" value="2" min="1" max="10">
+                        <small style="color: #666; font-size: 12px;">建议设置2-5秒，避免请求过于频繁</small>
+                    </div>
+                    
+                    <div class="operation-list" id="operation_list">
+                        <div style="text-align: center; padding: 20px; color: #666;">
+                            暂无操作，请添加退课或选课操作
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📊 运行状态</h3>
+            <div style="margin-bottom: 10px;">
+                <button class="btn" onclick="clearLogs()">🗑️ 清空日志</button>
+            </div>
+            <div id="status_display" class="status-display">
+                等待开始抢课...<br>
+                💡 使用说明：<br>
+                1. 📚 先添加要退掉的课程（点击"退课"后搜索或从已选课程中选择）<br>
+                2. 📝 再添加要选择的课程（点击"选课"后搜索课程）<br>
+                3. ⚡ 可以使用上下箭头调整操作执行顺序<br>
+                4. 🚀 点击"开始抢课"后程序会自动按顺序执行操作<br>
+                5. ⏸️ 随时可以点击"停止抢课"来终止脚本<br>
+                6. 🔄 程序会持续尝试直到所有操作成功完成<br>
+                7. 🔔 每次操作的结果都会以弹窗形式显示<br>
+                <br>
+                ⚠️ 注意：为避免频繁请求被系统限制，建议间隔时间设置在2-5秒
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast容器 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        let operations = [];
+        let isRunning = false;
+        let stopRequested = false;
+        let currentInterval = null;
+        let lastLogIndex = 0; // 用于跟踪已显示的日志条目
+
+        // Toast 功能
+        function showToast(message, type = 'info', duration = 5000) {
+            const container = document.getElementById('toast-container');
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            
+            container.appendChild(toast);
+            
+            // 显示动画
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            
+            // 自动隐藏
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (container.contains(toast)) {
+                        container.removeChild(toast);
+                    }
+                }, 300);
+            }, duration);
+        }
+
+        // 加载校区列表
+        async function loadCampuses() {
+            try {
+                const response = await fetch('/get_campuses');
+                const data = await response.json();
+                if (data.success) {
+                    const select = document.getElementById('campus_filter');
+                    data.campuses.forEach(campus => {
+                        const option = document.createElement('option');
+                        option.value = campus;
+                        option.textContent = campus;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('加载校区失败:', error);
+            }
+        }
+
+        // 搜索课程
+        async function searchCourses() {
+            const courseName = document.getElementById('search_input').value.trim();
+            const campus = document.getElementById('campus_filter').value;
+            
+            if (!courseName) {
+                showToast('请输入课程名称', 'warning', 3000);
+                return;
+            }
+
+            try {
+                const response = await fetch('/search_course', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        course_name: courseName,
+                        campus: campus
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    displayCourses(data.courses, 'search');
+                } else {
+                    showToast('搜索失败: ' + data.message, 'error', 5000);
+                }
+            } catch (error) {
+                showToast('搜索出错: ' + error.message, 'error', 5000);
+            }
+        }
+
+        // 加载已选课程
+        async function loadSelectedCourses() {
+            try {
+                const response = await fetch('/selected_courses');
+                const data = await response.json();
+                if (data.success) {
+                    displayCourses(data.courses, 'selected');
+                } else {
+                    showToast('加载已选课程失败: ' + data.message, 'error', 5000);
+                }
+            } catch (error) {
+                showToast('加载已选课程出错: ' + error.message, 'error', 5000);
+            }
+        }
+
+        // 显示课程列表
+        function displayCourses(courses, type) {
+            const container = document.getElementById('search_results');
+            
+            if (courses.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #666;">
+                        ${type === 'search' ? '未找到匹配的课程' : '暂无已选课程'}
+                    </div>
+                `;
+                return;
+            }
+
+            const html = courses.map(course => `
+                <div class="course-item" onclick="selectCourse(${course.id}, '${course.name}', '${course.code}', '${course.teachers}')">
+                    <div class="course-name">${course.name}</div>
+                    <div class="course-details">
+                        课程代码: ${course.code} | 教师: ${course.teachers} | 学分: ${course.credits}<br>
+                        校区: ${course.campus || '未知'} | 容量: ${course.capacity} | 已选: ${course.selected || '0'}
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+        }
+
+        // 选择课程
+        function selectCourse(id, name, code, teachers) {
+            const operationType = document.getElementById('operation_type').value;
+            
+            // 检查是否已存在相同操作
+            const exists = operations.some(op => op.course_id === id && op.type === operationType);
+            if (exists) {
+                showToast('该课程的此操作已存在', 'warning', 3000);
+                return;
+            }
+
+            const operation = {
+                id: Date.now(),
+                type: operationType,
+                course_id: id,
+                course_name: name,
+                course_code: code,
+                teachers: teachers,
+                status: 'pending'
+            };
+
+            operations.push(operation);
+            updateOperationList();
+            
+            // 清除选中状态
+            document.querySelectorAll('.course-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+        }
+
+        // 更新操作列表显示
+        function updateOperationList() {
+            const container = document.getElementById('operation_list');
+            
+            if (operations.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #666;">
+                        暂无操作，请添加退课或选课操作
+                    </div>
+                `;
+                return;
+            }
+
+            const html = operations.map((op, index) => `
+                <div class="operation-item ${op.type}" data-id="${op.id}">
+                    <div class="operation-info">
+                        <div class="operation-type">
+                            ${op.type === 'drop' ? '🔴 退课' : '🟢 选课'} - ${op.status === 'pending' ? '等待中' : op.status === 'success' ? '成功' : op.status === 'running' ? '执行中' : '失败'}
+                        </div>
+                        <div class="operation-course">
+                            ${op.course_name} (${op.course_code}) - ${op.teachers}
+                        </div>
+                    </div>
+                    <div class="operation-controls">
+                        <button class="btn" onclick="moveOperation(${index}, -1)" ${index === 0 ? 'disabled' : ''}>⬆️</button>
+                        <button class="btn" onclick="moveOperation(${index}, 1)" ${index === operations.length - 1 ? 'disabled' : ''}>⬇️</button>
+                        <button class="btn btn-danger" onclick="removeOperation(${index})">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+        }
+
+        // 移动操作顺序
+        function moveOperation(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= operations.length) return;
+
+            [operations[index], operations[newIndex]] = [operations[newIndex], operations[index]];
+            updateOperationList();
+        }
+
+        // 删除操作
+        function removeOperation(index) {
+            operations.splice(index, 1);
+            updateOperationList();
+        }
+
+        // 清空操作队列
+        function clearOperations() {
+            if (isRunning) {
+                showToast('请先停止抢课脚本', 'warning', 3000);
+                return;
+            }
+            operations = [];
+            updateOperationList();
+            showToast('操作队列已清空', 'info', 2000);
+        }
+
+        // 清空日志
+        async function clearLogs() {
+            try {
+                const response = await fetch('/clear_logs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('status_display').innerHTML = '';
+                    lastLogIndex = 0;
+                    showToast('日志已清空', 'info', 2000);
+                } else {
+                    showToast('清空日志失败: ' + data.message, 'error', 3000);
+                }
+            } catch (error) {
+                showToast('清空日志出错: ' + error.message, 'error', 3000);
+            }
+        }
+
+        // 开始自动抢课脚本
+        async function startAutoScript() {
+            if (operations.length === 0) {
+                showToast('请先添加操作', 'warning', 3000);
+                return;
+            }
+
+            if (isRunning) {
+                showToast('脚本正在运行中', 'warning', 3000);
+                return;
+            }
+
+            try {
+                const interval = parseInt(document.getElementById('interval').value);
+                
+                const response = await fetch('/start_auto_script', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        operations: operations.map(op => ({
+                            type: op.type,
+                            course_id: op.course_id,
+                            course_name: op.course_name
+                        })),
+                        interval: interval
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    isRunning = true;
+                    stopRequested = false;
+                    lastLogIndex = 0; // 重置日志索引
+                    updateStatus('🚀 自动抢课脚本已启动...', 'running');
+                    showToast('自动抢课脚本已启动', 'success', 3000);
+                    
+                    // 开始轮询状态
+                    pollScriptStatus();
+                } else {
+                    showToast('启动脚本失败: ' + data.message, 'error', 5000);
+                }
+            } catch (error) {
+                showToast('启动脚本出错: ' + error.message, 'error', 5000);
+            }
+        }
+
+        // 停止自动抢课脚本
+        async function stopAutoScript() {
+            if (!isRunning) {
+                showToast('脚本未在运行', 'warning', 3000);
+                return;
+            }
+
+            try {
+                const response = await fetch('/stop_auto_script', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    stopRequested = true;
+                    updateStatus('⏸️ 正在停止脚本...', 'stopped');
+                    showToast('正在停止脚本...', 'warning', 3000);
+                } else {
+                    showToast('停止脚本失败: ' + data.message, 'error', 5000);
+                }
+            } catch (error) {
+                showToast('停止脚本出错: ' + error.message, 'error', 5000);
+            }
+        }
+
+        // 轮询脚本状态和日志
+        async function pollScriptStatus() {
+            if (!isRunning && !stopRequested) return;
+
+            try {
+                // 检查脚本状态
+                const statusResponse = await fetch('/script_status');
+                const statusData = await statusResponse.json();
+                
+                // 获取新的日志
+                const logsResponse = await fetch(`/get_operation_logs?start_index=${lastLogIndex}`);
+                const logsData = await logsResponse.json();
+                
+                if (logsData.success && logsData.logs.length > 0) {
+                    // 显示新日志
+                    logsData.logs.forEach(log => {
+                        // 在状态显示区域添加日志
+                        updateStatus(log.message, log.type === 'success' ? 'running' : 'stopped');
+                        
+                        // 根据日志类型显示不同的toast
+                        if (log.type === 'error') {
+                            showToast(log.message, 'error', 8000); // 错误信息显示8秒
+                        } else if (log.type === 'success') {
+                            showToast(log.message, 'success', 3000);
+                        } else if (log.type === 'warning') {
+                            showToast(log.message, 'warning', 5000);
+                        }
+                    });
+                    
+                    // 更新日志索引
+                    lastLogIndex = logsData.total_count;
+                }
+                
+                if (!statusData.running && isRunning) {
+                    // 脚本已停止
+                    isRunning = false;
+                    updateStatus('✅ 脚本执行完成', 'stopped');
+                    showToast('脚本执行完成', 'info', 3000);
+                    return;
+                }
+                
+                if (statusData.running) {
+                    // 继续轮询
+                    setTimeout(pollScriptStatus, 2000);
+                }
+            } catch (error) {
+                console.error('轮询状态出错:', error);
+                showToast('轮询状态出错: ' + error.message, 'error', 5000);
+                setTimeout(pollScriptStatus, 5000); // 出错时延长间隔
+            }
+        }
+
+        // 更新状态显示
+        function updateStatus(message, type) {
+            const display = document.getElementById('status_display');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            display.innerHTML += `[${timestamp}] ${message}<br>`;
+            display.scrollTop = display.scrollHeight;
+            
+            display.className = `status-display status-${type}`;
+        }
+
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCampuses();
+            
+            // 回车搜索
+            document.getElementById('search_input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchCourses();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -197,6 +197,10 @@
     <div class="container">
         <div class="header">
             <h1>大连理工大学选课系统</h1>
+            <div style="margin-top: 15px;">
+                <a href="/auto_select" style="display: inline-block; background: #1976d2; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🚀 自动抢课脚本</a>
+                <a href="/" style="display: inline-block; background: #388e3c; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none;">🏠 主页</a>
+            </div>
             <div class="status">已从配置文件登录</div>
             <button onclick="refreshCache()" class="btn-secondary" style="margin-top: 10px;">刷新课程缓存</button>
         </div>
@@ -415,7 +419,7 @@
                         </div>
                         <div class="course-info">教师: ${course.teachers}</div>
                         <div class="course-info">校区: ${course.campus}</div>
-                        <div class="course-info">学分: ${course.credits} | 已选: ${course.selected || '0'}</div>
+                        <div class="course-info">学分: ${course.credits} | 容量: ${course.capacity} | 已选: ${course.selected || '0'}</div>
                         <div class="course-info">课程ID: ${course.id}</div>
                         <div class="course-actions">
                             <button onclick="dropCourse(${course.id})" class="btn-danger">退课</button>
