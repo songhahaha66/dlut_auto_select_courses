@@ -167,6 +167,8 @@
             font-family: monospace;
             font-size: 14px;
             white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
         }
         
         .running {
@@ -245,14 +247,10 @@
 
         <div class="section">
             <h3>运行状态</h3>
+            <div style="margin-bottom: 15px;">
+                <button class="btn btn-warning" onclick="clearHistory()">清空历史</button>
+            </div>
             <div id="status_display" class="status-display">
-等待开始...
-
-说明：
-1. 搜索课程并添加到队列
-2. 点击"开始队列"按钮
-3. 前端会按顺序调用单个API
-4. 每个操作之间等待设定的间隔时间
             </div>
         </div>
     </div>
@@ -262,11 +260,13 @@
         let isRunning = false;
         let currentIndex = 0;
         let queueInterval = null;
+        let statusHistory = [];
 
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadCampuses();
             updateOperationList();
+            initStatusDisplay();
         });
 
         // 加载校区列表
@@ -486,13 +486,13 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    updateStatus(`✅ 成功: ${operation.course_name}`, 'running');
+                    updateStatus(`✅ 成功: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`, 'running');
                 } else {
-                    updateStatus(`❌ 失败: ${operation.course_name} - ${data.message}`, 'running');
+                    updateStatus(`❌ 失败: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${data.message}`, 'running');
                 }
                 
             } catch (error) {
-                updateStatus(`❌ 错误: ${operation.course_name} - ${error.message}`, 'running');
+                updateStatus(`❌ 错误: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${error.message}`, 'running');
             }
             
             currentIndex++;
@@ -505,9 +505,31 @@
 
         // 更新状态显示
         function updateStatus(message, type = '') {
+            const timestamp = new Date().toLocaleTimeString();
+            const statusMessage = `[${timestamp}] ${message}`;
+            statusHistory.push(statusMessage);
+            
             const statusDiv = document.getElementById('status_display');
-            statusDiv.textContent = message;
+            statusDiv.textContent = statusHistory.join('\n');
             statusDiv.className = `status-display ${type}`;
+            
+            // 自动滚动到底部
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+
+        // 初始化状态显示
+        function initStatusDisplay() {
+            statusHistory = ['等待开始...', '', '说明：', '1. 搜索课程并添加到队列', '2. 点击"开始队列"按钮', '3. 前端会按顺序调用单个API', '4. 每个操作之间等待设定的间隔时间'];
+            const statusDiv = document.getElementById('status_display');
+            statusDiv.textContent = statusHistory.join('\n');
+        }
+
+        // 清空历史记录
+        function clearHistory() {
+            statusHistory = [];
+            const statusDiv = document.getElementById('status_display');
+            statusDiv.textContent = '历史已清空，等待新的操作...';
+            statusDiv.className = 'status-display';
         }
     </script>
 </body>

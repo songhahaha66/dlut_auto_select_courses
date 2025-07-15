@@ -79,7 +79,7 @@ def select_classes(class_id, turn_id):
         else:
             print("选课失败")
             # 返回完整错误信息字典
-            return r2_res if r2_res else {"error": "未知错误"}
+            return r2_res['errorMessage']['textZh'] if r2_res else {"error": "未知错误"}
     except Exception as e:
         return {"error": f"选课请求异常: {str(e)}"}
 
@@ -114,7 +114,7 @@ def drop_classes(class_id,turn_id):
             print("退课失败")
             print(r2_res)
             # 返回完整错误信息字典
-            return r2_res if r2_res else {"error": "未知错误"}
+            return r2_res['errorMessage']['textZh'] if r2_res else {"error": "未知错误"}
     except Exception as e:
         return {"error": f"退课请求异常: {str(e)}"}
 
