@@ -233,7 +233,22 @@
                     
                     <div class="form-group">
                         <label>间隔时间 (秒)</label>
-                        <input type="number" id="interval" value="2" min="1" max="10">
+                        <input type="number" id="interval" value="0" min="0" max="10">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="enableSchedule" onchange="toggleSchedule()">
+                            启用定时启动
+                        </label>
+                    </div>
+                    
+                    <div class="form-group" id="scheduleSettings" style="display: none;">
+                        <label>预定启动时间</label>
+                        <input type="datetime-local" id="scheduleTime">
+                        <div style="margin-top: 5px; font-size: 12px; color: #666;" id="timeInfo">
+                            当前时间: <span id="currentTime"></span>
+                        </div>
                     </div>
                     
                     <div class="operation-list" id="operation_list">
@@ -261,12 +276,17 @@
         let currentIndex = 0;
         let queueInterval = null;
         let statusHistory = [];
+        let scheduleTimeout = null;
+        let isScheduled = false;
 
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadCampuses();
             updateOperationList();
             initStatusDisplay();
+            updateCurrentTime();
+            // 每秒更新当前时间
+            setInterval(updateCurrentTime, 1000);
         });
 
         // 加载校区列表
@@ -433,6 +453,31 @@
                 return;
             }
             
+            const enableSchedule = document.getElementById('enableSchedule').checked;
+            
+            if (enableSchedule) {
+                const scheduleTime = document.getElementById('scheduleTime').value;
+                if (!scheduleTime) {
+                    alert('请设置预定启动时间');
+                    return;
+                }
+                
+                const scheduledDate = new Date(scheduleTime);
+                const now = new Date();
+                
+                if (scheduledDate <= now) {
+                    alert('预定时间必须大于当前时间');
+                    return;
+                }
+                
+                startScheduledQueue(scheduledDate);
+            } else {
+                startImmediateQueue();
+            }
+        }
+
+        // 立即启动队列
+        function startImmediateQueue() {
             isRunning = true;
             currentIndex = 0;
             document.getElementById('startBtn').disabled = true;
@@ -442,13 +487,57 @@
             executeNext();
         }
 
+        // 定时启动队列
+        function startScheduledQueue(scheduledDate) {
+            const now = new Date();
+            const delay = scheduledDate.getTime() - now.getTime();
+            
+            isScheduled = true;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            
+            updateStatus(`队列已预定，将在 ${scheduledDate.toLocaleString()} 启动`, 'running');
+            
+            // 显示倒计时
+            const countdownInterval = setInterval(() => {
+                const now = new Date();
+                const remaining = scheduledDate.getTime() - now.getTime();
+                
+                if (remaining <= 0 || !isScheduled) {
+                    clearInterval(countdownInterval);
+                    return;
+                }
+                
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+                updateStatus(`倒计时: ${minutes}分${seconds}秒后启动队列...`, 'running');
+            }, 1000);
+            
+            scheduleTimeout = setTimeout(() => {
+                if (isScheduled) {
+                    clearInterval(countdownInterval);
+                    updateStatus('预定时间到达，开始执行队列...', 'running');
+                    isScheduled = false;
+                    startImmediateQueue();
+                }
+            }, delay);
+        }
+
         // 停止队列
         function stopQueue() {
             isRunning = false;
+            isScheduled = false;
+            
             if (queueInterval) {
                 clearTimeout(queueInterval);
                 queueInterval = null;
             }
+            
+            if (scheduleTimeout) {
+                clearTimeout(scheduleTimeout);
+                scheduleTimeout = null;
+            }
+            
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
             
@@ -519,7 +608,7 @@
 
         // 初始化状态显示
         function initStatusDisplay() {
-            statusHistory = ['等待开始...', '', '说明：', '1. 搜索课程并添加到队列', '2. 点击"开始队列"按钮', '3. 前端会按顺序调用单个API', '4. 每个操作之间等待设定的间隔时间'];
+            statusHistory = ['等待开始...', '', '说明：', '1. 搜索课程并添加到队列', '2. 可选择立即启动或预定时间启动', '3. 点击"开始队列"按钮', '4. 前端会按顺序调用单个API', '5. 每个操作之间等待设定的间隔时间'];
             const statusDiv = document.getElementById('status_display');
             statusDiv.textContent = statusHistory.join('\n');
         }
@@ -530,6 +619,41 @@
             const statusDiv = document.getElementById('status_display');
             statusDiv.textContent = '历史已清空，等待新的操作...';
             statusDiv.className = 'status-display';
+        }
+
+        // 切换定时设置显示
+        function toggleSchedule() {
+            const enableSchedule = document.getElementById('enableSchedule').checked;
+            const scheduleSettings = document.getElementById('scheduleSettings');
+            
+            if (enableSchedule) {
+                scheduleSettings.style.display = 'block';
+                // 设置默认时间为当前时间+1分钟
+                const now = new Date();
+                now.setMinutes(now.getMinutes() + 1);
+                now.setHours(now.getHours() + 8);
+                const timeString = now.toISOString().slice(0, 16);
+                document.getElementById('scheduleTime').value = timeString;
+            } else {
+                scheduleSettings.style.display = 'none';
+            }
+        }
+
+        // 更新当前时间显示
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const currentTimeElement = document.getElementById('currentTime');
+            if (currentTimeElement) {
+                currentTimeElement.textContent = timeString;
+            }
         }
     </script>
 </body>
