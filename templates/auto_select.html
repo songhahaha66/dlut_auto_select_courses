@@ -242,6 +242,22 @@
                     </div>
                     
                     <div class="form-group">
+                        <label>并发设置</label>
+                        <select id="concurrencyMode">
+                            <option value="sequential">顺序执行</option>
+                            <option value="parallel">并发执行</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="threadSettings" style="display: none;">
+                        <label>并发线程数</label>
+                        <input type="number" id="threadCount" value="5" min="1" max="20">
+                        <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                            多个线程可同时抢同一门课，提高成功率
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
                         <label>
                             <input type="checkbox" id="enableSchedule" onchange="toggleSchedule()">
                             启用定时启动
@@ -292,6 +308,16 @@
             updateCurrentTime();
             // 每秒更新当前时间
             setInterval(updateCurrentTime, 1000);
+            
+            // 监听并发模式变化
+            document.getElementById('concurrencyMode').addEventListener('change', function() {
+                const threadSettings = document.getElementById('threadSettings');
+                if (this.value === 'parallel') {
+                    threadSettings.style.display = 'block';
+                } else {
+                    threadSettings.style.display = 'none';
+                }
+            });
         });
 
         // 加载校区列表
@@ -488,8 +514,15 @@
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
             
-            updateStatus('队列开始运行...', 'running');
-            executeNext();
+            const concurrencyMode = document.getElementById('concurrencyMode').value;
+            
+            if (concurrencyMode === 'parallel') {
+                updateStatus('队列开始运行... (并发模式)', 'running');
+                executeParallel();
+            } else {
+                updateStatus('队列开始运行... (顺序模式)', 'running');
+                executeNext();
+            }
         }
 
         // 定时启动队列
@@ -550,7 +583,7 @@
             updateOperationList();
         }
 
-        // 执行下一个操作
+        // 执行下一个操作 (顺序模式)
         async function executeNext() {
             if (!isRunning || currentIndex >= operations.length) {
                 // 一轮完成，重新开始
@@ -559,8 +592,12 @@
                 
                 if (isRunning) {
                     const interval = parseInt(document.getElementById('interval').value) * 1000;
-                    updateStatus(`一轮完成，等待 ${interval/1000} 秒后重新开始...`, 'running');
-                    queueInterval = setTimeout(executeNext, interval);
+                    if (interval > 0) {
+                        updateStatus(`一轮完成，等待 ${interval/1000} 秒后重新开始...`, 'running');
+                        queueInterval = setTimeout(executeNext, interval);
+                    } else {
+                        executeNext(); // 立即开始下一轮
+                    }
                 }
                 return;
             }
@@ -568,8 +605,77 @@
             const operation = operations[currentIndex];
             updateOperationList(); // 高亮当前操作
             
+            await executeOperation(operation, currentIndex);
+            
+            currentIndex++;
+            
+            if (isRunning) {
+                const interval = parseInt(document.getElementById('interval').value) * 1000;
+                if (interval > 0) {
+                    queueInterval = setTimeout(executeNext, interval);
+                } else {
+                    executeNext(); // 立即执行下一个
+                }
+            }
+        }
+
+        // 并发执行模式
+        async function executeParallel() {
+            if (!isRunning) return;
+            
+            const threadCount = parseInt(document.getElementById('threadCount').value);
+            const interval = parseInt(document.getElementById('interval').value) * 1000;
+            
+            // 创建多个并发任务
+            const tasks = [];
+            for (let i = 0; i < threadCount; i++) {
+                tasks.push(executeThread(i));
+            }
+            
+            // 等待所有任务完成
+            await Promise.all(tasks);
+            
+            // 如果还在运行，等待间隔后重新开始
+            if (isRunning) {
+                if (interval > 0) {
+                    updateStatus(`所有线程完成一轮，等待 ${interval/1000} 秒后重新开始...`, 'running');
+                    queueInterval = setTimeout(executeParallel, interval);
+                } else {
+                    executeParallel(); // 立即开始下一轮
+                }
+            }
+        }
+
+        // 单个线程执行
+        async function executeThread(threadId) {
+            while (isRunning) {
+                // 每个线程独立循环执行所有操作
+                for (let i = 0; i < operations.length && isRunning; i++) {
+                    const operation = operations[i];
+                    
+                    updateStatus(`线程${threadId + 1}: 正在执行 ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`, 'running');
+                    
+                    await executeOperation(operation, i, threadId + 1);
+                    
+                    // 线程间的小间隔，避免过于频繁的请求
+                    if (isRunning) {
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+                
+                // 一轮完成后的间隔
+                const interval = parseInt(document.getElementById('interval').value) * 1000;
+                if (interval > 0 && isRunning) {
+                    updateStatus(`线程${threadId + 1}: 一轮完成，等待 ${interval/1000} 秒...`, 'running');
+                    await new Promise(resolve => setTimeout(resolve, interval));
+                }
+            }
+        }
+
+        // 执行单个操作
+        async function executeOperation(operation, index, threadId = null) {
             try {
-                updateStatus(`正在执行: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`, 'running');
+                const threadPrefix = threadId ? `线程${threadId}: ` : '';
                 
                 const endpoint = operation.type === 'select' ? '/select_course' : '/drop_course';
                 const response = await fetch(endpoint, {
@@ -580,20 +686,14 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    updateStatus(`✅ 成功: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`, 'running');
+                    updateStatus(`${threadPrefix}✅ 成功: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`, 'running');
                 } else {
-                    updateStatus(`❌ 失败: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${data.message}`, 'running');
+                    updateStatus(`${threadPrefix}❌ 失败: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${data.message}`, 'running');
                 }
                 
             } catch (error) {
-                updateStatus(`❌ 错误: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${error.message}`, 'running');
-            }
-            
-            currentIndex++;
-            
-            if (isRunning) {
-                const interval = parseInt(document.getElementById('interval').value) * 1000;
-                queueInterval = setTimeout(executeNext, interval);
+                const threadPrefix = threadId ? `线程${threadId}: ` : '';
+                updateStatus(`${threadPrefix}❌ 错误: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${error.message}`, 'running');
             }
         }
 
@@ -613,7 +713,7 @@
 
         // 初始化状态显示
         function initStatusDisplay() {
-            statusHistory = ['等待开始...', '', '说明：', '1. 搜索课程并添加到队列', '2. 可选择立即启动或预定时间启动', '3. 点击"开始队列"按钮', '4. 前端会按顺序调用单个API', '5. 每个操作之间等待设定的间隔时间'];
+            statusHistory = ['等待开始...', '', '说明：', '1. 搜索课程并添加到队列', '2. 选择顺序执行或并发执行模式', '3. 并发模式下多个线程可同时抢同一门课', '4. 可选择立即启动或预定时间启动', '5. 点击"开始队列"按钮开始抢课'];
             const statusDiv = document.getElementById('status_display');
             statusDiv.textContent = statusHistory.join('\n');
         }
