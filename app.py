@@ -159,5 +159,117 @@ def refresh_lesson_cache():
     except Exception as e:
         return jsonify({'success': False, 'message': f'刷新课程缓存失败: {str(e)}'})
 
+@app.route('/monitor')
+def monitor():
+    return render_template('monitor.html')
+
+@app.route('/check_course_availability', methods=['POST'])
+def check_course_availability():
+    try:
+        data = request.get_json()
+        course_ids = data.get('course_ids', [])
+        
+        if not course_ids:
+            return jsonify({'success': False, 'message': '没有提供课程ID'})
+        
+        # 获取课程的当前选课人数
+        selected_numbers = get_selected_numbers(course_ids)
+        
+        available_courses = []
+        for course_id in course_ids:
+            course_id_str = str(course_id)
+            if course_id_str in selected_numbers:
+                selected_info = selected_numbers[course_id_str]
+                selected_count = int(selected_info.split('-')[0])
+                
+                # 从ilist中找到对应课程的容量信息
+                course_info = None
+                for course in ilist:
+                    if course['id'] == course_id:
+                        course_info = course
+                        break
+                
+                if course_info:
+                    capacity = course_info['limitCount']
+                    available_spots = capacity - selected_count
+                    
+                    # 如果有余量，记录课程信息
+                    if available_spots > 0:
+                        teachers = ', '.join([t['nameZh'] for t in course_info['teachers']])
+                        course_campus = course_info.get('campus', {}).get('nameZh', '') if 'campus' in course_info else ''
+                        available_courses.append({
+                            'id': course_id,
+                            'name': course_info['course']['nameZh'],
+                            'code': course_info['code'],
+                            'teachers': teachers,
+                            'campus': course_campus,
+                            'selected': selected_count,
+                            'capacity': capacity,
+                            'available': available_spots
+                        })
+        
+        return jsonify({
+            'success': True, 
+            'available_courses': available_courses,
+            'total_monitored': len(course_ids)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'检查课程余量失败: {str(e)}'})
+
+@app.route('/auto_select_available', methods=['POST'])
+def auto_select_available():
+    try:
+        data = request.get_json()
+        course_id = data.get('course_id')
+        
+        if not course_id:
+            return jsonify({'success': False, 'message': '没有提供课程ID'})
+        
+        # 再次检查余量（避免竞态条件）
+        selected_numbers = get_selected_numbers([course_id])
+        course_id_str = str(course_id)
+        
+        if course_id_str in selected_numbers:
+            selected_info = selected_numbers[course_id_str]
+            selected_count = int(selected_info.split('-')[0])
+            
+            # 从ilist中找到对应课程的容量信息
+            course_info = None
+            for course in ilist:
+                if course['id'] == course_id:
+                    course_info = course
+                    break
+            
+            if course_info:
+                capacity = course_info['limitCount']
+                available_spots = capacity - selected_count
+                
+                if available_spots > 0:
+                    # 有余量，尝试选课
+                    result = select_classes(course_id, turn_id)
+                    if result is True:
+                        return jsonify({
+                            'success': True, 
+                            'message': f'自动选课成功: {course_info["course"]["nameZh"]}',
+                            'course_name': course_info['course']['nameZh']
+                        })
+                    else:
+                        error_msg = str(result) if result else "选课失败，未知错误"
+                        return jsonify({
+                            'success': False, 
+                            'message': f'自动选课失败: {error_msg}',
+                            'course_name': course_info['course']['nameZh']
+                        })
+                else:
+                    return jsonify({
+                        'success': False, 
+                        'message': '课程已满，无法选课',
+                        'course_name': course_info['course']['nameZh']
+                    })
+        
+        return jsonify({'success': False, 'message': '无法获取课程信息'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'自动选课失败: {str(e)}'})
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

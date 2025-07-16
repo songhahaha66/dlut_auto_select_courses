@@ -30,8 +30,8 @@ def get_class_turns(i):
     }
     r = requests.post(url, data=data, cookies=cookies)
     data1=json.loads(r.text)
-    data1=data1[i] #0一般是主修选课
-    return data1['id']
+    # data1=data1[i] #0一般是主修选课
+    return 2601
 
 def get_itemList(id):
     url = f"http://jxgl.dlut.edu.cn/student/cache/course-select/version/{id}/version.json"
