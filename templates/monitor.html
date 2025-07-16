@@ -582,17 +582,17 @@
         // 尝试自动选课
         async function attemptAutoSelect(courseId, courseName) {
             try {
-                const response = await fetch('/auto_select_available', {
+                const response = await fetch('/select_course', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({course_id: courseId})
+                    body: JSON.stringify({class_id: courseId})
                 });
                 
                 const data = await response.json();
                 if (data.success) {
                     successCount++;
                     updateStats();
-                    addLog(`🎉 自动选课成功: ${data.course_name}`, 'monitoring');
+                    addLog(`🎉 自动选课成功: ${courseName}`, 'monitoring');
                     
                     // 选课成功后从监控列表中移除
                     const index = monitorCourses.findIndex(course => course.id === courseId);
@@ -602,10 +602,10 @@
                         updateStats();
                     }
                 } else {
-                    addLog(`❌ 自动选课失败: ${data.message}`, 'monitoring');
+                    addLog(`❌ 自动选课失败: ${courseName} - ${data.message}`, 'monitoring');
                 }
             } catch (error) {
-                addLog(`❌ 自动选课出错: ${error.message}`, 'monitoring');
+                addLog(`❌ 自动选课出错: ${courseName} - ${error.message}`, 'monitoring');
             }
         }
 
