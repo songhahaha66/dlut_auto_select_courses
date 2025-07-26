@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大连理工大学选课系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section {
+            background: white;
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section h3 {
+            margin-bottom: 15px;
+            color: #1976d2;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        input, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        button:hover {
+            background: #1565c0;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #666;
+        }
+        
+        .btn-secondary:hover {
+            background: #555;
+        }
+        
+        .btn-danger {
+            background: #d32f2f;
+        }
+        
+        .btn-danger:hover {
+            background: #c62828;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .course-item {
+            border: 1px solid #eee;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+        
+        .course-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .course-info {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .course-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .course-actions button {
+            width: auto;
+            padding: 5px 15px;
+            font-size: 12px;
+        }
+        
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        
+        .status {
+            padding: 5px 10px;
+            background: #e8f5e8;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 15px;
+            color: #2e7d32;
+        }
+        .toast {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            min-width: 220px;
+            max-width: 350px;
+            z-index: 9999;
+            padding: 16px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s, transform 0.4s;
+            transform: translateY(-20px);
+        }
+        .toast.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+        .toast.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        .toast.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>大连理工大学选课系统</h1>
+            <div style="margin-top: 15px;">
+                <a href="/auto_select" style="display: inline-block; background: #1976d2; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🚀 自动抢课脚本</a>
+                <a href="/monitor" style="display: inline-block; background: #f57c00; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🔍 余量监控</a>
+                <a href="/" style="display: inline-block; background: #388e3c; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none;">🏠 主页</a>
+            </div>
+            <div class="status">已从配置文件登录</div>
+            <button onclick="refreshCache()" class="btn-secondary" style="margin-top: 10px;">刷新课程缓存</button>
+        </div>
+
+        <!-- 主要功能部分 -->
+        <div class="grid">                <!-- 搜索课程 -->
+                <div class="section">
+                    <h3>搜索课程</h3>
+                    <div class="form-group">
+                        <label>课程名称:</label>
+                        <input type="text" id="courseName" placeholder="输入课程名称">
+                    </div>
+                    <div class="form-group">
+                        <label>校区:</label>
+                        <select id="campusSelect">
+                            <option value="">全部校区</option>
+                        </select>
+                    </div>
+                    <button onclick="searchCourse()">搜索</button>
+                    <div id="searchResults"></div>
+                </div>
+
+            <!-- 已选课程 -->
+            <div class="section">
+                <h3>已选课程</h3>
+                <button onclick="getSelectedCourses()" class="btn-secondary">刷新</button>
+                <div id="selectedCourses"></div>
+            </div>
+        </div>
+
+        <div id="message"></div>
+    </div>
+    <div id="toast"></div>
+    <script>
+        // 页面加载时自动获取已选课程和校区列表
+        window.onload = function() {
+            getSelectedCourses();
+            loadCampuses();
+        };
+
+        async function loadCampuses() {
+            try {
+                const response = await fetch('/get_campuses');
+                const result = await response.json();
+                if (result.success) {
+                    const select = document.getElementById('campusSelect');
+                    result.campuses.forEach(campus => {
+                        const option = document.createElement('option');
+                        option.value = campus;
+                        option.textContent = campus;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('加载校区失败:', error);
+            }
+        }
+
+        function showMessage(text, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.className = 'toast ' + (isError ? 'error' : 'success');
+            toast.textContent = text;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        async function refreshCache() {
+            try {
+                const response = await fetch('/refresh_lesson_cache');
+                const result = await response.json();
+                showMessage(result.message, !result.success);
+            } catch (error) {
+                showMessage('刷新缓存失败: ' + error.message, true);
+            }
+        }
+
+        async function searchCourse() {
+            const courseName = document.getElementById('courseName').value;
+            const campus = document.getElementById('campusSelect').value;
+            
+            if (!courseName) {
+                showMessage('请输入课程名称', true);
+                return;
+            }
+
+            try {
+                const response = await fetch('/search_course', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        course_name: courseName,
+                        campus: campus
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    displaySearchResults(result.courses);
+                } else {
+                    showMessage(result.message, true);
+                }
+            } catch (error) {
+                showMessage('搜索失败: ' + error.message, true);
+            }
+        }
+
+        function displaySearchResults(courses) {
+            const resultsDiv = document.getElementById('searchResults');
+            if (courses.length === 0) {
+                resultsDiv.innerHTML = '<p>未找到相关课程</p>';
+                return;
+            }
+
+            let html = '';
+            courses.forEach(course => {
+                html += `
+                    <div class="course-item">
+                        <div style="display: flex; align-items: baseline; gap: 10px;">
+                            <span class="course-name" style="font-size: 1.2em;">${course.name}</span>
+                            <span class="course-code" style="font-size: 0.9em; color: #888;">${course.code}</span>
+                        </div>
+                        <div class="course-info">教师: ${course.teachers}</div>
+                        <div class="course-info">校区: ${course.campus}</div>
+                        <div class="course-info">学分: ${course.credits} | 容量: ${course.capacity} | 已选: ${course.selected || '0'}</div>
+                        <div class="course-info">课程ID: ${course.id}</div>
+                        <div class="course-actions">
+                            <button onclick="selectCourse(${course.id})">选课</button>
+                        </div>
+                    </div>
+                `;
+            });
+            resultsDiv.innerHTML = html;
+        }
+
+        async function selectCourse(classId) {
+            try {
+                const response = await fetch('/select_course', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        class_id: classId
+                    })
+                });
+
+                const result = await response.json();
+                showMessage(result.message,true);
+                if (result.success) {
+                    getSelectedCourses();
+                }
+            } catch (error) {
+                showMessage('选课失败: ' + error.message, true);
+            }
+        }
+
+        async function dropCourse(classId) {
+            if (!confirm('确定要退课吗？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/drop_course', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        class_id: classId
+                    })
+                });
+
+                const result = await response.json();
+                showMessage(result.message, !result.success);
+                if (result.success) {
+                    getSelectedCourses();
+                }
+            } catch (error) {
+                showMessage('退课失败: ' + error.message, true);
+            }
+        }
+
+        async function getSelectedCourses() {
+            try {
+                const response = await fetch('/selected_courses');
+                const result = await response.json();
+                
+                if (result.success) {
+                    displaySelectedCourses(result.courses);
+                } else {
+                    showMessage(result.message, true);
+                }
+            } catch (error) {
+                showMessage('获取已选课程失败: ' + error.message, true);
+            }
+        }
+
+        function displaySelectedCourses(courses) {
+            const selectedDiv = document.getElementById('selectedCourses');
+            if (courses.length === 0) {
+                selectedDiv.innerHTML = '<p>暂无已选课程</p>';
+                return;
+            }
+
+            let html = '';
+            courses.forEach(course => {
+                html += `
+                    <div class="course-item">
+                        <div style="display: flex; align-items: baseline; gap: 10px;">
+                            <span class="course-name" style="font-size: 1.2em;">${course.name}</span>
+                            <span class="course-code" style="font-size: 0.9em; color: #888;">${course.code}</span>
+                        </div>
+                        <div class="course-info">教师: ${course.teachers}</div>
+                        <div class="course-info">校区: ${course.campus}</div>
+                        <div class="course-info">学分: ${course.credits} | 容量: ${course.capacity} | 已选: ${course.selected || '0'}</div>
+                        <div class="course-info">课程ID: ${course.id}</div>
+                        <div class="course-actions">
+                            <button onclick="dropCourse(${course.id})" class="btn-danger">退课</button>
+                        </div>
+                    </div>
+                `;
+            });
+            selectedDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
