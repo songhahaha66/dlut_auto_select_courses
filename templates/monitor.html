@@ -4,313 +4,153 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>余量监控 - 大连理工大学选课系统</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .section {
-            background: white;
-            margin-bottom: 20px;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .section h3 {
-            margin-bottom: 15px;
-            color: #1976d2;
-        }
-        
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .btn {
-            background: #1976d2;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-        
-        .btn:hover {
-            background: #1565c0;
-        }
-        
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .btn-success {
-            background: #388e3c;
-        }
-        
-        .btn-danger {
-            background: #d32f2f;
-        }
-        
-        .btn-warning {
-            background: #f57c00;
-        }
-        
-        .search-results {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        
-        .course-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .course-info {
-            flex: 1;
-        }
-        
-        .course-name {
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        
-        .course-details {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .monitor-list {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            min-height: 200px;
-            padding: 10px;
-        }
-        
-        .monitor-item {
-            padding: 10px;
-            margin-bottom: 5px;
-            background: #f9f9f9;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .monitor-item.available {
-            background: #e8f5e8;
-            border: 2px solid #4caf50;
-        }
-        
-        .monitor-item.full {
-            background: #ffebee;
-        }
-        
-        .status-display {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 4px;
-            border-left: 4px solid #1976d2;
-            font-family: monospace;
-            font-size: 14px;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .monitoring {
-            border-left-color: #4caf50;
-            background: #e8f5e8;
-        }
-        
-        .stopped {
-            border-left-color: #ff9800;
-            background: #fff3e0;
-        }
-        
-        .monitor-stats {
-            display: flex;
-            justify-content: space-around;
-            background: #f0f0f0;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        
-        .stat-item {
-            text-align: center;
-        }
-        
-        .stat-number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #1976d2;
-        }
-        
-        .stat-label {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        @media (max-width: 768px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🔍 余量监控</h1>
-            <p>实时监控课程余量，自动抢课</p>
-            <div style="margin-top: 15px;">
-                <a href="/auto_select" style="display: inline-block; background: #1976d2; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🚀 自动抢课脚本</a>
-                <a href="/monitor" style="display: inline-block; background: #f57c00; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🔍 余量监控</a>
-                <a href="/" style="display: inline-block; background: #388e3c; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none;">🏠 主页</a>
+<body class="bg-light">
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/"><i class="bi bi-mortarboard-fill me-2"></i>大连理工大学选课系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house"></i> 主页</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/auto_select"><i class="bi bi-lightning"></i> 自动抢课</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/monitor"><i class="bi bi-eye"></i> 余量监控</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <!-- 统计卡片 -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="text-primary mb-0" id="totalCourses">0</h3>
+                        <small class="text-muted">监控课程</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="text-success mb-0" id="availableCourses">0</h3>
+                        <small class="text-muted">有余量</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="text-info mb-0" id="checkCount">0</h3>
+                        <small class="text-muted">检查次数</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card text-center border-0 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="text-warning mb-0" id="successCount">0</h3>
+                        <small class="text-muted">成功选课</small>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="grid">
-            <div>
-                <div class="section">
-                    <h3>搜索课程</h3>
-                    <div class="form-group">
-                        <label>课程名称</label>
-                        <input type="text" id="search_input" placeholder="输入课程名称...">
+        <div class="row g-4">
+            <!-- 搜索课程 -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="bi bi-search text-primary me-2"></i>搜索课程</h5>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>校区筛选</label>
-                        <select id="campus_filter">
-                            <option value="">所有校区</option>
-                        </select>
-                    </div>
-                    
-                    <button class="btn" onclick="searchCourses()">搜索课程</button>
-                    
-                    <div class="search-results" id="search_results">
-                        <div style="text-align: center; padding: 20px; color: #666;">
-                            请搜索课程
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">课程名称</label>
+                            <input type="text" class="form-control" id="search_input" placeholder="输入课程名称...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">校区筛选</label>
+                            <select class="form-select" id="campus_filter">
+                                <option value="">所有校区</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary w-100" onclick="searchCourses()">
+                            <i class="bi bi-search"></i> 搜索课程
+                        </button>
+                        <div id="search_results" class="mt-3" style="max-height: 350px; overflow-y: auto;">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1"></i>
+                                <p>请搜索课程</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div>
-                <div class="section">
-                    <h3>监控设置</h3>
-                    <div style="margin-bottom: 15px;">
-                        <button class="btn btn-success" onclick="startMonitoring()" id="startBtn">开始监控</button>
-                        <button class="btn btn-warning" onclick="stopMonitoring()" id="stopBtn" disabled>停止监控</button>
-                        <button class="btn btn-danger" onclick="clearMonitorList()">清空列表</button>
+            <!-- 监控设置 -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="bi bi-gear text-primary me-2"></i>监控设置</h5>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>检查间隔 (秒)</label>
-                        <input type="number" id="interval" value="3" min="1" max="30">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="autoSelect" checked>
-                            发现余量时自动选课
-                        </label>
-                    </div>
-                    
-                    <div class="monitor-list" id="monitor_list">
-                        <div style="text-align: center; padding: 20px; color: #666;">
-                            暂无监控课程
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-success" onclick="startMonitoring()" id="startBtn">
+                                <i class="bi bi-play-fill"></i> 开始监控
+                            </button>
+                            <button class="btn btn-warning" onclick="stopMonitoring()" id="stopBtn" disabled>
+                                <i class="bi bi-pause-fill"></i> 停止
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="clearMonitorList()">
+                                <i class="bi bi-trash"></i> 清空
+                            </button>
+                        </div>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="form-label">检查间隔 (秒)</label>
+                                <input type="number" class="form-control" id="interval" value="3" min="1" max="30">
+                            </div>
+                            <div class="col-6 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="autoSelect" checked>
+                                    <label class="form-check-label" for="autoSelect">发现余量自动选课</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="monitor_list" style="max-height: 300px; overflow-y: auto;">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1"></i>
+                                <p>暂无监控课程</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="section">
-            <h3>监控统计</h3>
-            <div class="monitor-stats">
-                <div class="stat-item">
-                    <div class="stat-number" id="totalCourses">0</div>
-                    <div class="stat-label">监控课程</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number" id="availableCourses">0</div>
-                    <div class="stat-label">有余量</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number" id="checkCount">0</div>
-                    <div class="stat-label">检查次数</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number" id="successCount">0</div>
-                    <div class="stat-label">成功选课</div>
-                </div>
+        <!-- 监控日志 -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-terminal text-primary me-2"></i>监控日志</h5>
+                <button class="btn btn-outline-secondary btn-sm" onclick="clearLogs()">
+                    <i class="bi bi-trash"></i> 清空日志
+                </button>
             </div>
-        </div>
-
-        <div class="section">
-            <h3>监控日志</h3>
-            <div style="margin-bottom: 15px;">
-                <button class="btn btn-warning" onclick="clearLogs()">清空日志</button>
-            </div>
-            <div id="log_display" class="status-display">
+            <div class="card-body p-0">
+                <pre id="log_display" class="bg-dark text-light p-3 mb-0" style="max-height: 250px; overflow-y: auto; font-size: 13px;"></pre>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let monitorCourses = [];
         let isMonitoring = false;
@@ -319,14 +159,12 @@
         let checkCount = 0;
         let successCount = 0;
 
-        // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadCampuses();
             updateMonitorList();
             initLogDisplay();
         });
 
-        // 加载校区列表
         async function loadCampuses() {
             try {
                 const response = await fetch('/get_campuses');
@@ -345,7 +183,6 @@
             }
         }
 
-        // 搜索课程
         async function searchCourses() {
             const courseName = document.getElementById('search_input').value.trim();
             const campus = document.getElementById('campus_filter').value;
@@ -373,99 +210,90 @@
             }
         }
 
-        // 显示课程列表
         function showCourses(courses) {
             const container = document.getElementById('search_results');
             
             if (courses.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">未找到课程</div>';
+                container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>未找到课程</p></div>';
                 return;
             }
             
-            container.innerHTML = '';
+            let html = '<div class="list-group list-group-flush">';
             courses.forEach(course => {
-                const div = document.createElement('div');
-                div.className = 'course-item';
                 const availableSpots = course.capacity - parseInt(course.selected);
+                const statusClass = availableSpots > 0 ? 'text-success' : 'text-danger';
                 const statusText = availableSpots > 0 ? `余量: ${availableSpots}` : '已满';
-                const statusColor = availableSpots > 0 ? '#4caf50' : '#f44336';
                 
-                div.innerHTML = `
-                    <div class="course-info">
-                        <div class="course-name">${course.name}</div>
-                        <div class="course-details">
-                            代码: ${course.code} | 教师: ${course.teachers} | 学分: ${course.credits} | 
-                            已选: ${course.selected}/${course.capacity} | 校区: ${course.campus}
+                html += `
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${course.name}</h6>
+                                <small class="text-muted">${course.teachers} | ${course.campus} | ${course.selected}/${course.capacity}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge ${availableSpots > 0 ? 'bg-success' : 'bg-danger'} mb-1">${statusText}</span><br>
+                                <button class="btn btn-primary btn-sm" onclick="addToMonitor(${course.id}, '${course.name}', '${course.code}', '${course.teachers}', '${course.campus}', ${course.capacity})">
+                                    <i class="bi bi-plus"></i> 监控
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div>
-                        <span style="color: ${statusColor}; font-weight: bold; margin-right: 10px;">${statusText}</span>
-                        <button class="btn" onclick="addToMonitor(${course.id}, '${course.name}', '${course.code}', '${course.teachers}', '${course.campus}', ${course.capacity})">添加监控</button>
-                    </div>
                 `;
-                container.appendChild(div);
             });
+            html += '</div>';
+            container.innerHTML = html;
         }
 
-        // 添加到监控列表
         function addToMonitor(courseId, courseName, courseCode, teachers, campus, capacity) {
-            // 检查是否已存在
             if (monitorCourses.find(course => course.id === courseId)) {
                 alert('该课程已在监控列表中');
                 return;
             }
             
             monitorCourses.push({
-                id: courseId,
-                name: courseName,
-                code: courseCode,
-                teachers: teachers,
-                campus: campus,
-                capacity: capacity,
-                selected: 0,
-                available: 0,
-                lastCheck: null
+                id: courseId, name: courseName, code: courseCode,
+                teachers: teachers, campus: campus, capacity: capacity,
+                selected: 0, available: 0, lastCheck: null
             });
             
             updateMonitorList();
             updateStats();
         }
 
-        // 更新监控列表
         function updateMonitorList() {
             const container = document.getElementById('monitor_list');
             
             if (monitorCourses.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">暂无监控课程</div>';
+                container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>暂无监控课程</p></div>';
                 return;
             }
             
-            container.innerHTML = '';
+            let html = '<div class="list-group list-group-flush">';
             monitorCourses.forEach((course, index) => {
-                const div = document.createElement('div');
                 const hasAvailable = course.available > 0;
-                div.className = `monitor-item ${hasAvailable ? 'available' : 'full'}`;
+                const statusText = course.lastCheck ? `${course.selected}/${course.capacity} (余量: ${course.available})` : '未检查';
                 
-                const statusText = course.lastCheck ? 
-                    `${course.selected}/${course.capacity} (余量: ${course.available})` : 
-                    '未检查';
-                
-                div.innerHTML = `
-                    <div>
-                        <strong>${course.name}</strong>
-                        <br><small>ID: ${course.id} | ${course.teachers} | ${course.campus}</small>
-                        <br><small style="color: ${hasAvailable ? '#4caf50' : '#666'};">${statusText}</small>
-                    </div>
-                    <div>
-                        ${hasAvailable ? '<span style="color: #4caf50; font-weight: bold; margin-right: 10px;">🟢 有余量</span>' : ''}
-                        <button class="btn btn-danger" onclick="removeFromMonitor(${index})" ${isMonitoring ? 'disabled' : ''}>删除</button>
+                html += `
+                    <div class="list-group-item px-0 ${hasAvailable ? 'list-group-item-success' : ''}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${course.name}</strong>
+                                ${hasAvailable ? '<span class="badge bg-success ms-2">有余量</span>' : ''}
+                                <br><small class="text-muted">ID: ${course.id} | ${course.teachers}</small>
+                                <br><small class="${hasAvailable ? 'text-success' : 'text-muted'}">${statusText}</small>
+                            </div>
+                            <button class="btn btn-outline-danger btn-sm" onclick="removeFromMonitor(${index})" ${isMonitoring ? 'disabled' : ''}>
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
                     </div>
                 `;
-                container.appendChild(div);
             });
+            html += '</div>';
+            container.innerHTML = html;
         }
 
-        // 从监控列表删除
         function removeFromMonitor(index) {
             if (isMonitoring) return;
             monitorCourses.splice(index, 1);
@@ -473,7 +301,6 @@
             updateStats();
         }
 
-        // 清空监控列表
         function clearMonitorList() {
             if (isMonitoring) return;
             monitorCourses = [];
@@ -481,7 +308,6 @@
             updateStats();
         }
 
-        // 开始监控
         function startMonitoring() {
             if (monitorCourses.length === 0) {
                 alert('请先添加要监控的课程');
@@ -492,11 +318,10 @@
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
             
-            addLog('🚀 开始监控课程余量...', 'monitoring');
+            addLog('🚀 开始监控课程余量...');
             checkCourses();
         }
 
-        // 停止监控
         function stopMonitoring() {
             isMonitoring = false;
             if (monitorInterval) {
@@ -506,10 +331,9 @@
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
             
-            addLog('⏸️ 监控已停止', 'stopped');
+            addLog('⏸️ 监控已停止');
         }
 
-        // 检查课程余量
         async function checkCourses() {
             if (!isMonitoring) return;
             
@@ -526,7 +350,6 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    // 更新课程状态
                     monitorCourses.forEach(course => {
                         course.lastCheck = new Date().toLocaleTimeString();
                         const availableCourse = data.available_courses.find(ac => ac.id === course.id);
@@ -534,52 +357,43 @@
                             course.selected = availableCourse.selected;
                             course.available = availableCourse.available;
                         } else {
-                            // 没有余量的课程
-                            const allCourseInfo = data.available_courses.find(ac => ac.id === course.id);
-                            if (!allCourseInfo) {
-                                // 需要重新获取选课人数信息
-                                course.available = 0;
-                            }
+                            course.available = 0;
                         }
                     });
                     
                     updateMonitorList();
                     updateStats();
                     
-                    // 如果有余量且开启自动选课
                     if (data.available_courses.length > 0) {
-                        addLog(`🟢 发现 ${data.available_courses.length} 门课程有余量!`, 'monitoring');
+                        addLog(`🟢 发现 ${data.available_courses.length} 门课程有余量!`);
                         
                         if (document.getElementById('autoSelect').checked) {
-                            // 自动选课
                             for (const course of data.available_courses) {
-                                addLog(`🎯 尝试自动选课: ${course.name}`, 'monitoring');
+                                addLog(`🎯 尝试自动选课: ${course.name}`);
                                 await attemptAutoSelect(course.id, course.name);
                             }
                         } else {
                             data.available_courses.forEach(course => {
-                                addLog(`💡 ${course.name} 有 ${course.available} 个余量`, 'monitoring');
+                                addLog(`💡 ${course.name} 有 ${course.available} 个余量`);
                             });
                         }
                     } else {
-                        addLog(`🔍 [${new Date().toLocaleTimeString()}] 检查完成，暂无余量`, 'monitoring');
+                        addLog(`🔍 检查完成，暂无余量`);
                     }
                 } else {
-                    addLog(`❌ 检查失败: ${data.message}`, 'monitoring');
+                    addLog(`❌ 检查失败: ${data.message}`);
                 }
                 
             } catch (error) {
-                addLog(`❌ 检查出错: ${error.message}`, 'monitoring');
+                addLog(`❌ 检查出错: ${error.message}`);
             }
             
-            // 继续下次检查
             if (isMonitoring) {
                 const interval = parseInt(document.getElementById('interval').value) * 1000;
                 monitorInterval = setTimeout(checkCourses, interval);
             }
         }
 
-        // 尝试自动选课
         async function attemptAutoSelect(courseId, courseName) {
             try {
                 const response = await fetch('/select_course', {
@@ -592,9 +406,8 @@
                 if (data.success) {
                     successCount++;
                     updateStats();
-                    addLog(`🎉 自动选课成功: ${courseName}`, 'monitoring');
+                    addLog(`🎉 自动选课成功: ${courseName}`);
                     
-                    // 选课成功后从监控列表中移除
                     const index = monitorCourses.findIndex(course => course.id === courseId);
                     if (index !== -1) {
                         monitorCourses.splice(index, 1);
@@ -602,14 +415,13 @@
                         updateStats();
                     }
                 } else {
-                    addLog(`❌ 自动选课失败: ${courseName} - ${data.message}`, 'monitoring');
+                    addLog(`❌ 自动选课失败: ${courseName} - ${data.message}`);
                 }
             } catch (error) {
-                addLog(`❌ 自动选课出错: ${courseName} - ${error.message}`, 'monitoring');
+                addLog(`❌ 自动选课出错: ${courseName} - ${error.message}`);
             }
         }
 
-        // 更新统计信息
         function updateStats() {
             document.getElementById('totalCourses').textContent = monitorCourses.length;
             const availableCount = monitorCourses.filter(course => course.available > 0).length;
@@ -618,39 +430,29 @@
             document.getElementById('successCount').textContent = successCount;
         }
 
-        // 添加日志
-        function addLog(message, type = '') {
+        function addLog(message) {
             const timestamp = new Date().toLocaleTimeString();
-            const logMessage = `[${timestamp}] ${message}`;
-            logHistory.push(logMessage);
-            
-            // 保持最新100条日志
-            if (logHistory.length > 100) {
-                logHistory.shift();
-            }
+            logHistory.push(`[${timestamp}] ${message}`);
+            if (logHistory.length > 100) logHistory.shift();
             
             const logDiv = document.getElementById('log_display');
             logDiv.textContent = logHistory.join('\n');
-            logDiv.className = `status-display ${type}`;
-            
-            // 自动滚动到底部
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        // 初始化日志显示
         function initLogDisplay() {
-            logHistory = ['等待开始监控...', '', '说明：', '1. 搜索并添加要监控的课程', '2. 设置检查间隔和自动选课选项', '3. 点击"开始监控"', '4. 系统会持续检查课程余量', '5. 发现余量时自动选课（如果开启）'];
-            const logDiv = document.getElementById('log_display');
-            logDiv.textContent = logHistory.join('\n');
+            logHistory = ['等待开始监控...'];
+            document.getElementById('log_display').textContent = logHistory.join('\n');
         }
 
-        // 清空日志
         function clearLogs() {
-            logHistory = [];
-            const logDiv = document.getElementById('log_display');
-            logDiv.textContent = '日志已清空，等待新的监控...';
-            logDiv.className = 'status-display';
+            logHistory = ['日志已清空'];
+            document.getElementById('log_display').textContent = logHistory.join('\n');
         }
+
+        document.getElementById('search_input').addEventListener('keypress', e => {
+            if (e.key === 'Enter') searchCourses();
+        });
     </script>
 </body>
 </html>

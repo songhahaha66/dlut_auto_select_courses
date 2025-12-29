@@ -4,323 +4,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>自动抢课 - 大连理工大学选课系统</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .section {
-            background: white;
-            margin-bottom: 20px;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .section h3 {
-            margin-bottom: 15px;
-            color: #1976d2;
-        }
-        
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .btn {
-            background: #1976d2;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-        
-        .btn:hover {
-            background: #1565c0;
-        }
-        
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .btn-success {
-            background: #388e3c;
-        }
-        
-        .btn-danger {
-            background: #d32f2f;
-        }
-        
-        .btn-warning {
-            background: #f57c00;
-        }
-        
-        .search-results {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        
-        .course-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .course-info {
-            flex: 1;
-        }
-        
-        .course-name {
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        
-        .course-details {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .operation-list {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            min-height: 200px;
-            padding: 10px;
-        }
-        
-        .operation-item {
-            padding: 10px;
-            margin-bottom: 5px;
-            background: #f9f9f9;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .operation-type-select {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        
-        .operation-type-drop {
-            background: #ffebee;
-            color: #d32f2f;
-        }
-        
-        .status-display {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 4px;
-            border-left: 4px solid #1976d2;
-            font-family: monospace;
-            font-size: 14px;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .running {
-            border-left-color: #4caf50;
-            background: #e8f5e8;
-        }
-        
-        .stopped {
-            border-left-color: #ff9800;
-            background: #fff3e0;
-        }
-        
-        @media (max-width: 768px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🚀 自动抢课</h1>
-            <p>前端控制队列 - 逐个调用API</p>
-            <div style="margin-top: 15px;">
-                <a href="/auto_select" style="display: inline-block; background: #1976d2; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🚀 自动抢课脚本</a>
-                <a href="/monitor" style="display: inline-block; background: #f57c00; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🔍 余量监控</a>
-                <a href="/" style="display: inline-block; background: #388e3c; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none;">🏠 主页</a>
+<body class="bg-light">
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/"><i class="bi bi-mortarboard-fill me-2"></i>大连理工大学选课系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-house"></i> 主页</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/auto_select"><i class="bi bi-lightning"></i> 自动抢课</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/monitor"><i class="bi bi-eye"></i> 余量监控</a></li>
+                </ul>
             </div>
         </div>
+    </nav>
 
-        <div class="grid">
-            <div>
-                <div class="section">
-                    <h3>搜索课程</h3>
-                    <div class="form-group">
-                        <label>课程名称</label>
-                        <input type="text" id="search_input" placeholder="输入课程名称...">
+    <div class="container py-4">
+        <div class="row g-4">
+            <!-- 搜索课程 -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="bi bi-search text-primary me-2"></i>搜索课程</h5>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>校区筛选</label>
-                        <select id="campus_filter">
-                            <option value="">所有校区</option>
-                        </select>
-                    </div>
-                    
-                    <button class="btn" onclick="searchCourses()">搜索课程</button>
-                    <button class="btn" onclick="loadSelectedCourses()">已选课程</button>
-                    
-                    <div class="search-results" id="search_results">
-                        <div style="text-align: center; padding: 20px; color: #666;">
-                            请搜索课程
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">课程名称</label>
+                            <input type="text" class="form-control" id="search_input" placeholder="输入课程名称...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">校区筛选</label>
+                            <select class="form-select" id="campus_filter"><option value="">所有校区</option></select>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary flex-grow-1" onclick="searchCourses()"><i class="bi bi-search"></i> 搜索</button>
+                            <button class="btn btn-outline-secondary flex-grow-1" onclick="loadSelectedCourses()"><i class="bi bi-bookmark"></i> 已选课程</button>
+                        </div>
+                        <div id="search_results" class="mt-3" style="max-height: 350px; overflow-y: auto;">
+                            <div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>请搜索课程</p></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div>
-                <div class="section">
-                    <h3>操作队列</h3>
-                    <div style="margin-bottom: 15px;">
-                        <button class="btn btn-success" onclick="startQueue()" id="startBtn">开始队列</button>
-                        <button class="btn btn-warning" onclick="stopQueue()" id="stopBtn" disabled>停止队列</button>
-                        <button class="btn btn-danger" onclick="clearOperations()">清空队列</button>
+            <!-- 操作队列 -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="bi bi-list-task text-primary me-2"></i>操作队列</h5>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>间隔时间 (秒)</label>
-                        <input type="number" id="interval" value="0" min="0" max="10">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>并发设置</label>
-                        <select id="concurrencyMode">
-                            <option value="sequential">顺序执行</option>
-                            <option value="parallel">并发执行</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" id="threadSettings" style="display: none;">
-                        <label>并发线程数</label>
-                        <input type="number" id="threadCount" value="5" min="1" max="20">
-                        <div style="margin-top: 5px; font-size: 12px; color: #666;">
-                            多个线程可同时抢同一门课，提高成功率
+                    <div class="card-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-success" onclick="startQueue()" id="startBtn"><i class="bi bi-play-fill"></i> 开始</button>
+                            <button class="btn btn-warning" onclick="stopQueue()" id="stopBtn" disabled><i class="bi bi-pause-fill"></i> 停止</button>
+                            <button class="btn btn-outline-danger" onclick="clearOperations()"><i class="bi bi-trash"></i> 清空</button>
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="enableSchedule" onchange="toggleSchedule()">
-                            启用定时启动
-                        </label>
-                    </div>
-                    
-                    <div class="form-group" id="scheduleSettings" style="display: none;">
-                        <label>预定启动时间</label>
-                        <input type="datetime-local" id="scheduleTime">
-                        <div style="margin-top: 5px; font-size: 12px; color: #666;" id="timeInfo">
-                            当前时间: <span id="currentTime"></span>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small">间隔 (秒)</label>
+                                <input type="number" class="form-control form-control-sm" id="interval" value="0" min="0" max="10">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">执行模式</label>
+                                <select class="form-select form-select-sm" id="concurrencyMode">
+                                    <option value="sequential">顺序执行</option>
+                                    <option value="parallel">并发执行</option>
+                                </select>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="operation-list" id="operation_list">
-                        <div style="text-align: center; padding: 20px; color: #666;">
-                            暂无操作
+                        <div class="mb-3" id="threadSettings" style="display: none;">
+                            <label class="form-label small">并发线程数</label>
+                            <input type="number" class="form-control form-control-sm" id="threadCount" value="5" min="1" max="20">
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="enableSchedule" onchange="toggleSchedule()">
+                            <label class="form-check-label small" for="enableSchedule">启用定时启动</label>
+                        </div>
+                        <div class="mb-3" id="scheduleSettings" style="display: none;">
+                            <label class="form-label small">预定启动时间</label>
+                            <input type="datetime-local" class="form-control form-control-sm" id="scheduleTime">
+                            <small class="text-muted">当前: <span id="currentTime"></span></small>
+                        </div>
+                        <div id="operation_list" style="max-height: 250px; overflow-y: auto;">
+                            <div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>暂无操作</p></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="section">
-            <h3>运行状态</h3>
-            <div style="margin-bottom: 15px;">
-                <button class="btn btn-warning" onclick="clearHistory()">清空历史</button>
+        <!-- 运行状态 -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-terminal text-primary me-2"></i>运行状态</h5>
+                <button class="btn btn-outline-secondary btn-sm" onclick="clearHistory()"><i class="bi bi-trash"></i> 清空</button>
             </div>
-            <div id="status_display" class="status-display">
+            <div class="card-body p-0">
+                <pre id="status_display" class="bg-dark text-light p-3 mb-0" style="max-height: 250px; overflow-y: auto; font-size: 13px;"></pre>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let operations = [];
-        let isRunning = false;
-        let currentIndex = 0;
-        let queueInterval = null;
-        let statusHistory = [];
-        let scheduleTimeout = null;
-        let isScheduled = false;
+        let operations = [], isRunning = false, currentIndex = 0, queueInterval = null, statusHistory = [], scheduleTimeout = null, isScheduled = false;
 
-        // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
-            loadCampuses();
-            updateOperationList();
-            initStatusDisplay();
-            updateCurrentTime();
-            // 每秒更新当前时间
+            loadCampuses(); updateOperationList(); initStatusDisplay(); updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
-            
-            // 监听并发模式变化
             document.getElementById('concurrencyMode').addEventListener('change', function() {
-                const threadSettings = document.getElementById('threadSettings');
-                if (this.value === 'parallel') {
-                    threadSettings.style.display = 'block';
-                } else {
-                    threadSettings.style.display = 'none';
-                }
+                document.getElementById('threadSettings').style.display = this.value === 'parallel' ? 'block' : 'none';
             });
         });
 
-        // 加载校区列表
         async function loadCampuses() {
             try {
                 const response = await fetch('/get_campuses');
@@ -329,437 +131,245 @@
                     const select = document.getElementById('campus_filter');
                     data.campuses.forEach(campus => {
                         const option = document.createElement('option');
-                        option.value = campus;
-                        option.textContent = campus;
+                        option.value = campus; option.textContent = campus;
                         select.appendChild(option);
                     });
                 }
-            } catch (error) {
-                console.error('加载校区失败:', error);
-            }
+            } catch (error) { console.error('加载校区失败:', error); }
         }
 
-        // 搜索课程
         async function searchCourses() {
             const courseName = document.getElementById('search_input').value.trim();
             const campus = document.getElementById('campus_filter').value;
-            
-            if (!courseName) {
-                alert('请输入课程名称');
-                return;
-            }
-            
+            if (!courseName) { alert('请输入课程名称'); return; }
             try {
                 const response = await fetch('/search_course', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({course_name: courseName, campus: campus})
                 });
-                
                 const data = await response.json();
-                if (data.success) {
-                    showCourses(data.courses, 'select');
-                } else {
-                    alert('搜索失败: ' + data.message);
-                }
-            } catch (error) {
-                alert('搜索出错: ' + error.message);
-            }
+                if (data.success) showCourses(data.courses, 'select');
+                else alert('搜索失败: ' + data.message);
+            } catch (error) { alert('搜索出错: ' + error.message); }
         }
 
-        // 加载已选课程
         async function loadSelectedCourses() {
             try {
                 const response = await fetch('/selected_courses');
                 const data = await response.json();
-                if (data.success) {
-                    showCourses(data.courses, 'drop');
-                } else {
-                    alert('加载失败: ' + data.message);
-                }
-            } catch (error) {
-                alert('加载出错: ' + error.message);
-            }
+                if (data.success) showCourses(data.courses, 'drop');
+                else alert('加载失败: ' + data.message);
+            } catch (error) { alert('加载出错: ' + error.message); }
         }
 
-        // 显示课程列表
         function showCourses(courses, defaultType) {
             const container = document.getElementById('search_results');
-            
             if (courses.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">未找到课程</div>';
+                container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>未找到课程</p></div>';
                 return;
             }
-            
-            container.innerHTML = '';
+            let html = '<div class="list-group list-group-flush">';
             courses.forEach(course => {
-                const div = document.createElement('div');
-                div.className = 'course-item';
-                div.innerHTML = `
-                    <div class="course-info">
-                        <div class="course-name">${course.name}</div>
-                        <div class="course-details">
-                            代码: ${course.code} | 教师: ${course.teachers} | 学分: ${course.credits} | 
-                            已选: ${course.selected}/${course.capacity} | 校区: ${course.campus}
+                html += `<div class="list-group-item px-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">${course.name}</h6>
+                            <small class="text-muted">${course.teachers} | ${course.campus} | ${course.selected}/${course.capacity}</small>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm" id="type_${course.id}" style="width:80px;">
+                                <option value="select" ${defaultType === 'select' ? 'selected' : ''}>选课</option>
+                                <option value="drop" ${defaultType === 'drop' ? 'selected' : ''}>退课</option>
+                            </select>
+                            <button class="btn btn-primary btn-sm" onclick="addOperation(${course.id}, '${course.name}')"><i class="bi bi-plus"></i></button>
                         </div>
                     </div>
-                    <div>
-                        <select id="type_${course.id}">
-                            <option value="select" ${defaultType === 'select' ? 'selected' : ''}>选课</option>
-                            <option value="drop" ${defaultType === 'drop' ? 'selected' : ''}>退课</option>
-                        </select>
-                        <button class="btn" onclick="addOperation(${course.id}, '${course.name}')">添加</button>
-                    </div>
-                `;
-                container.appendChild(div);
+                </div>`;
             });
+            html += '</div>';
+            container.innerHTML = html;
         }
 
-        // 添加操作
         function addOperation(courseId, courseName) {
-            const typeSelect = document.getElementById(`type_${courseId}`);
-            const type = typeSelect.value;
-            
-            // 检查是否已存在
-            if (operations.find(op => op.course_id === courseId && op.type === type)) {
-                alert('该操作已存在');
-                return;
-            }
-            
-            operations.push({
-                course_id: courseId,
-                type: type,
-                course_name: courseName
-            });
-            
+            const type = document.getElementById(`type_${courseId}`).value;
+            if (operations.find(op => op.course_id === courseId && op.type === type)) { alert('该操作已存在'); return; }
+            operations.push({ course_id: courseId, type: type, course_name: courseName });
             updateOperationList();
         }
 
-        // 更新操作列表
         function updateOperationList() {
             const container = document.getElementById('operation_list');
-            
             if (operations.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">暂无操作</div>';
+                container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>暂无操作</p></div>';
                 return;
             }
-            
-            container.innerHTML = '';
+            let html = '<div class="list-group list-group-flush">';
             operations.forEach((op, index) => {
-                const div = document.createElement('div');
-                div.className = `operation-item operation-type-${op.type}`;
-                if (index === currentIndex && isRunning) {
-                    div.style.border = '2px solid #4caf50';
-                }
-                div.innerHTML = `
-                    <div>
-                        <strong>${op.type === 'select' ? '选课' : '退课'}</strong>: ${op.course_name}
-                        <br><small>ID: ${op.course_id}</small>
+                const isSelect = op.type === 'select';
+                html += `<div class="list-group-item px-0 ${isSelect ? 'list-group-item-primary' : 'list-group-item-danger'}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge ${isSelect ? 'bg-primary' : 'bg-danger'}">${isSelect ? '选课' : '退课'}</span>
+                            <strong class="ms-2">${op.course_name}</strong>
+                            <br><small class="text-muted">ID: ${op.course_id}</small>
+                        </div>
+                        <button class="btn btn-outline-danger btn-sm" onclick="removeOperation(${index})" ${isRunning ? 'disabled' : ''}><i class="bi bi-x"></i></button>
                     </div>
-                    <button class="btn btn-danger" onclick="removeOperation(${index})" ${isRunning ? 'disabled' : ''}>删除</button>
-                `;
-                container.appendChild(div);
+                </div>`;
             });
+            html += '</div>';
+            container.innerHTML = html;
         }
 
-        // 删除操作
-        function removeOperation(index) {
-            if (isRunning) return;
-            operations.splice(index, 1);
-            updateOperationList();
-        }
+        function removeOperation(index) { if (isRunning) return; operations.splice(index, 1); updateOperationList(); }
+        function clearOperations() { if (isRunning) return; operations = []; currentIndex = 0; updateOperationList(); }
 
-        // 清空操作
-        function clearOperations() {
-            if (isRunning) return;
-            operations = [];
-            currentIndex = 0;
-            updateOperationList();
-        }
-
-        // 开始队列
         function startQueue() {
-            if (operations.length === 0) {
-                alert('请先添加操作');
-                return;
-            }
-            
+            if (operations.length === 0) { alert('请先添加操作'); return; }
             const enableSchedule = document.getElementById('enableSchedule').checked;
-            
             if (enableSchedule) {
                 const scheduleTime = document.getElementById('scheduleTime').value;
-                if (!scheduleTime) {
-                    alert('请设置预定启动时间');
-                    return;
-                }
-                
+                if (!scheduleTime) { alert('请设置预定启动时间'); return; }
                 const scheduledDate = new Date(scheduleTime);
-                const now = new Date();
-                
-                if (scheduledDate <= now) {
-                    alert('预定时间必须大于当前时间');
-                    return;
-                }
-                
+                if (scheduledDate <= new Date()) { alert('预定时间必须大于当前时间'); return; }
                 startScheduledQueue(scheduledDate);
-            } else {
-                startImmediateQueue();
-            }
+            } else { startImmediateQueue(); }
         }
 
-        // 立即启动队列
         function startImmediateQueue() {
-            isRunning = true;
-            currentIndex = 0;
+            isRunning = true; currentIndex = 0;
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
-            
-            const concurrencyMode = document.getElementById('concurrencyMode').value;
-            
-            if (concurrencyMode === 'parallel') {
-                updateStatus('队列开始运行... (并发模式)', 'running');
-                executeParallel();
-            } else {
-                updateStatus('队列开始运行... (顺序模式)', 'running');
-                executeNext();
-            }
+            const mode = document.getElementById('concurrencyMode').value;
+            updateStatus('队列开始运行... (' + (mode === 'parallel' ? '并发' : '顺序') + '模式)');
+            mode === 'parallel' ? executeParallel() : executeNext();
         }
 
-        // 定时启动队列
         function startScheduledQueue(scheduledDate) {
-            const now = new Date();
-            const delay = scheduledDate.getTime() - now.getTime();
-            
             isScheduled = true;
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
-            
-            updateStatus(`队列已预定，将在 ${scheduledDate.toLocaleString()} 启动`, 'running');
-            
-            // 显示倒计时
+            updateStatus(`队列已预定，将在 ${scheduledDate.toLocaleString()} 启动`);
             const countdownInterval = setInterval(() => {
-                const now = new Date();
-                const remaining = scheduledDate.getTime() - now.getTime();
-                
-                if (remaining <= 0 || !isScheduled) {
-                    clearInterval(countdownInterval);
-                    return;
-                }
-                
-                const minutes = Math.floor(remaining / 60000);
-                const seconds = Math.floor((remaining % 60000) / 1000);
-                updateStatus(`倒计时: ${minutes}分${seconds}秒后启动队列...`, 'running');
+                const remaining = scheduledDate.getTime() - new Date().getTime();
+                if (remaining <= 0 || !isScheduled) { clearInterval(countdownInterval); return; }
+                const m = Math.floor(remaining / 60000), s = Math.floor((remaining % 60000) / 1000);
+                updateStatus(`倒计时: ${m}分${s}秒后启动队列...`);
             }, 1000);
-            
             scheduleTimeout = setTimeout(() => {
-                if (isScheduled) {
-                    clearInterval(countdownInterval);
-                    updateStatus('预定时间到达，开始执行队列...', 'running');
-                    isScheduled = false;
-                    startImmediateQueue();
-                }
-            }, delay);
+                if (isScheduled) { clearInterval(countdownInterval); updateStatus('预定时间到达，开始执行队列...'); isScheduled = false; startImmediateQueue(); }
+            }, scheduledDate.getTime() - new Date().getTime());
         }
 
-        // 停止队列
         function stopQueue() {
-            isRunning = false;
-            isScheduled = false;
-            
-            if (queueInterval) {
-                clearTimeout(queueInterval);
-                queueInterval = null;
-            }
-            
-            if (scheduleTimeout) {
-                clearTimeout(scheduleTimeout);
-                scheduleTimeout = null;
-            }
-            
+            isRunning = false; isScheduled = false;
+            if (queueInterval) { clearTimeout(queueInterval); queueInterval = null; }
+            if (scheduleTimeout) { clearTimeout(scheduleTimeout); scheduleTimeout = null; }
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
-            
-            updateStatus('队列已停止', 'stopped');
-            updateOperationList();
+            updateStatus('队列已停止');
         }
 
-        // 执行下一个操作 (顺序模式)
         async function executeNext() {
             if (!isRunning || currentIndex >= operations.length) {
-                // 一轮完成，重新开始
-                currentIndex = 0;
-                updateOperationList();
-                
+                currentIndex = 0; updateOperationList();
                 if (isRunning) {
                     const interval = parseInt(document.getElementById('interval').value) * 1000;
-                    if (interval > 0) {
-                        updateStatus(`一轮完成，等待 ${interval/1000} 秒后重新开始...`, 'running');
-                        queueInterval = setTimeout(executeNext, interval);
-                    } else {
-                        executeNext(); // 立即开始下一轮
-                    }
+                    if (interval > 0) { updateStatus(`一轮完成，等待 ${interval/1000} 秒后重新开始...`); queueInterval = setTimeout(executeNext, interval); }
+                    else executeNext();
                 }
                 return;
             }
-            
             const operation = operations[currentIndex];
-            updateOperationList(); // 高亮当前操作
-            
+            updateOperationList();
             await executeOperation(operation, currentIndex);
-            
             currentIndex++;
-            
             if (isRunning) {
                 const interval = parseInt(document.getElementById('interval').value) * 1000;
-                if (interval > 0) {
-                    queueInterval = setTimeout(executeNext, interval);
-                } else {
-                    executeNext(); // 立即执行下一个
-                }
+                interval > 0 ? queueInterval = setTimeout(executeNext, interval) : executeNext();
             }
         }
 
-        // 并发执行模式
         async function executeParallel() {
             if (!isRunning) return;
-            
             const threadCount = parseInt(document.getElementById('threadCount').value);
-            const interval = parseInt(document.getElementById('interval').value) * 1000;
-            
-            // 创建多个并发任务
             const tasks = [];
-            for (let i = 0; i < threadCount; i++) {
-                tasks.push(executeThread(i));
-            }
-            
-            // 等待所有任务完成
+            for (let i = 0; i < threadCount; i++) tasks.push(executeThread(i));
             await Promise.all(tasks);
-            
-            // 如果还在运行，等待间隔后重新开始
             if (isRunning) {
-                if (interval > 0) {
-                    updateStatus(`所有线程完成一轮，等待 ${interval/1000} 秒后重新开始...`, 'running');
-                    queueInterval = setTimeout(executeParallel, interval);
-                } else {
-                    executeParallel(); // 立即开始下一轮
-                }
+                const interval = parseInt(document.getElementById('interval').value) * 1000;
+                if (interval > 0) { updateStatus(`所有线程完成一轮，等待 ${interval/1000} 秒后重新开始...`); queueInterval = setTimeout(executeParallel, interval); }
+                else executeParallel();
             }
         }
 
-        // 单个线程执行
         async function executeThread(threadId) {
             while (isRunning) {
-                // 每个线程独立循环执行所有操作
                 for (let i = 0; i < operations.length && isRunning; i++) {
                     const operation = operations[i];
-                    
-                    updateStatus(`线程${threadId + 1}: 正在执行 ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`, 'running');
-                    
+                    updateStatus(`线程${threadId + 1}: 正在执行 ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`);
                     await executeOperation(operation, i, threadId + 1);
-                    
-                    // 线程间的小间隔，避免过于频繁的请求
-                    if (isRunning) {
-                        await new Promise(resolve => setTimeout(resolve, 50));
-                    }
+                    if (isRunning) await new Promise(resolve => setTimeout(resolve, 50));
                 }
-                
-                // 一轮完成后的间隔
                 const interval = parseInt(document.getElementById('interval').value) * 1000;
                 if (interval > 0 && isRunning) {
-                    updateStatus(`线程${threadId + 1}: 一轮完成，等待 ${interval/1000} 秒...`, 'running');
+                    updateStatus(`线程${threadId + 1}: 一轮完成，等待 ${interval/1000} 秒...`);
                     await new Promise(resolve => setTimeout(resolve, interval));
                 }
             }
         }
 
-        // 执行单个操作
         async function executeOperation(operation, index, threadId = null) {
             try {
                 const threadPrefix = threadId ? `线程${threadId}: ` : '';
-                
                 const endpoint = operation.type === 'select' ? '/select_course' : '/drop_course';
                 const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({class_id: operation.course_id})
                 });
-                
                 const data = await response.json();
-                if (data.success) {
-                    updateStatus(`${threadPrefix}✅ 成功: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`, 'running');
-                } else {
-                    updateStatus(`${threadPrefix}❌ 失败: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${data.message}`, 'running');
-                }
-                
+                const action = operation.type === 'select' ? '选课' : '退课';
+                if (data.success) updateStatus(`${threadPrefix}✅ 成功: ${action} - ${operation.course_name}`);
+                else updateStatus(`${threadPrefix}❌ 失败: ${action} - ${operation.course_name} - ${data.message}`);
             } catch (error) {
                 const threadPrefix = threadId ? `线程${threadId}: ` : '';
-                updateStatus(`${threadPrefix}❌ 错误: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${error.message}`, 'running');
+                updateStatus(`${threadPrefix}❌ 错误: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${error.message}`);
             }
         }
 
-        // 更新状态显示
-        function updateStatus(message, type = '') {
+        function updateStatus(message) {
             const timestamp = new Date().toLocaleTimeString();
-            const statusMessage = `[${timestamp}] ${message}`;
-            statusHistory.push(statusMessage);
-            
+            statusHistory.push(`[${timestamp}] ${message}`);
             const statusDiv = document.getElementById('status_display');
             statusDiv.textContent = statusHistory.join('\n');
-            statusDiv.className = `status-display ${type}`;
-            
-            // 自动滚动到底部
             statusDiv.scrollTop = statusDiv.scrollHeight;
         }
 
-        // 初始化状态显示
         function initStatusDisplay() {
-            statusHistory = ['等待开始...', '', '说明：', '1. 搜索课程并添加到队列', '2. 选择顺序执行或并发执行模式', '3. 并发模式下多个线程可同时抢同一门课', '4. 可选择立即启动或预定时间启动', '5. 点击"开始队列"按钮开始抢课'];
-            const statusDiv = document.getElementById('status_display');
-            statusDiv.textContent = statusHistory.join('\n');
+            statusHistory = ['等待开始...'];
+            document.getElementById('status_display').textContent = statusHistory.join('\n');
         }
 
-        // 清空历史记录
         function clearHistory() {
-            statusHistory = [];
-            const statusDiv = document.getElementById('status_display');
-            statusDiv.textContent = '历史已清空，等待新的操作...';
-            statusDiv.className = 'status-display';
+            statusHistory = ['历史已清空'];
+            document.getElementById('status_display').textContent = statusHistory.join('\n');
         }
 
-        // 切换定时设置显示
         function toggleSchedule() {
-            const enableSchedule = document.getElementById('enableSchedule').checked;
-            const scheduleSettings = document.getElementById('scheduleSettings');
-            
-            if (enableSchedule) {
-                scheduleSettings.style.display = 'block';
-                // 设置默认时间为当前时间+1分钟
-                const now = new Date();
-                now.setMinutes(now.getMinutes() + 1);
-                now.setHours(now.getHours() + 8);
-                const timeString = now.toISOString().slice(0, 16);
-                document.getElementById('scheduleTime').value = timeString;
-            } else {
-                scheduleSettings.style.display = 'none';
+            const enabled = document.getElementById('enableSchedule').checked;
+            document.getElementById('scheduleSettings').style.display = enabled ? 'block' : 'none';
+            if (enabled) {
+                const now = new Date(); now.setMinutes(now.getMinutes() + 1); now.setHours(now.getHours() + 8);
+                document.getElementById('scheduleTime').value = now.toISOString().slice(0, 16);
             }
         }
 
-        // 更新当前时间显示
         function updateCurrentTime() {
-            const now = new Date();
-            const timeString = now.toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            const currentTimeElement = document.getElementById('currentTime');
-            if (currentTimeElement) {
-                currentTimeElement.textContent = timeString;
-            }
+            const el = document.getElementById('currentTime');
+            if (el) el.textContent = new Date().toLocaleString('zh-CN');
         }
+
+        document.getElementById('search_input').addEventListener('keypress', e => { if (e.key === 'Enter') searchCourses(); });
     </script>
 </body>
 </html>

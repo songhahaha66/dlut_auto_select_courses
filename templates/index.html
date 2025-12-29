@@ -4,239 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>大连理工大学选课系统</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .section {
-            background: white;
-            margin-bottom: 20px;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .section h3 {
-            margin-bottom: 15px;
-            color: #1976d2;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        
-        input, button {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        button {
-            background: #1976d2;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        
-        button:hover {
-            background: #1565c0;
-        }
-        
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .btn-secondary {
-            background: #666;
-        }
-        
-        .btn-secondary:hover {
-            background: #555;
-        }
-        
-        .btn-danger {
-            background: #d32f2f;
-        }
-        
-        .btn-danger:hover {
-            background: #c62828;
-        }
-        
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        
-        .course-item {
-            border: 1px solid #eee;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            background: #fafafa;
-        }
-        
-        .course-name {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .course-info {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .course-actions {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .course-actions button {
-            width: auto;
-            padding: 5px 15px;
-            font-size: 12px;
-        }
-        
-        .message {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .success {
-            background: #e8f5e8;
-            color: #2e7d32;
-            border: 1px solid #c8e6c9;
-        }
-        
-        .error {
-            background: #ffebee;
-            color: #c62828;
-            border: 1px solid #ffcdd2;
-        }
-        
-        .status {
-            padding: 5px 10px;
-            background: #e8f5e8;
-            border-radius: 20px;
-            font-size: 12px;
-            display: inline-block;
-            margin-bottom: 15px;
-            color: #2e7d32;
-        }
-        .toast {
-            position: fixed;
-            top: 30px;
-            right: 30px;
-            min-width: 220px;
-            max-width: 350px;
-            z-index: 9999;
-            padding: 16px 24px;
-            border-radius: 6px;
-            font-size: 15px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.4s, transform 0.4s;
-            transform: translateY(-20px);
-        }
-        .toast.show {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translateY(0);
-        }
-        .toast.success {
-            background: #e8f5e8;
-            color: #2e7d32;
-            border: 1px solid #c8e6c9;
-        }
-        .toast.error {
-            background: #ffebee;
-            color: #c62828;
-            border: 1px solid #ffcdd2;
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>大连理工大学选课系统</h1>
-            <div style="margin-top: 15px;">
-                <a href="/auto_select" style="display: inline-block; background: #1976d2; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🚀 自动抢课脚本</a>
-                <a href="/monitor" style="display: inline-block; background: #f57c00; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; margin-right: 10px;">🔍 余量监控</a>
-                <a href="/" style="display: inline-block; background: #388e3c; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none;">🏠 主页</a>
-            </div>
-            <div class="status">已从配置文件登录</div>
-            <button onclick="refreshCache()" class="btn-secondary" style="margin-top: 10px;">刷新课程缓存</button>
-        </div>
-
-        <!-- 主要功能部分 -->
-        <div class="grid">                <!-- 搜索课程 -->
-                <div class="section">
-                    <h3>搜索课程</h3>
-                    <div class="form-group">
-                        <label>课程名称:</label>
-                        <input type="text" id="courseName" placeholder="输入课程名称">
-                    </div>
-                    <div class="form-group">
-                        <label>校区:</label>
-                        <select id="campusSelect">
-                            <option value="">全部校区</option>
-                        </select>
-                    </div>
-                    <button onclick="searchCourse()">搜索</button>
-                    <div id="searchResults"></div>
+<body class="bg-light">
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/"><i class="bi bi-mortarboard-fill me-2"></i>大连理工大学选课系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link active" href="/"><i class="bi bi-house"></i> 主页</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/auto_select"><i class="bi bi-lightning"></i> 自动抢课</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/monitor"><i class="bi bi-eye"></i> 余量监控</a></li>
+                </ul>
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-success me-3"><i class="bi bi-check-circle"></i> 已登录</span>
+                    <button class="btn btn-outline-light btn-sm me-2" onclick="refreshCache()"><i class="bi bi-arrow-clockwise"></i> 刷新缓存</button>
+                    <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right"></i> 退出</button>
                 </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <div class="row g-4">
+            <!-- 搜索课程 -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="bi bi-search text-primary me-2"></i>搜索课程</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">课程名称</label>
+                            <input type="text" class="form-control" id="courseName" placeholder="输入课程名称">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">校区</label>
+                            <select class="form-select" id="campusSelect">
+                                <option value="">全部校区</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary w-100" onclick="searchCourse()">
+                            <i class="bi bi-search"></i> 搜索
+                        </button>
+                        <div id="searchResults" class="mt-3" style="max-height: 400px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
 
             <!-- 已选课程 -->
-            <div class="section">
-                <h3>已选课程</h3>
-                <button onclick="getSelectedCourses()" class="btn-secondary">刷新</button>
-                <div id="selectedCourses"></div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-bookmark-check text-success me-2"></i>已选课程</h5>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="getSelectedCourses()">
+                            <i class="bi bi-arrow-clockwise"></i> 刷新
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="selectedCourses" style="max-height: 500px; overflow-y: auto;"></div>
+                    </div>
+                </div>
             </div>
         </div>
-
-        <div id="message"></div>
     </div>
-    <div id="toast"></div>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert">
+            <div class="toast-header">
+                <i class="bi bi-info-circle me-2" id="toastIcon"></i>
+                <strong class="me-auto" id="toastTitle">通知</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastBody"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // 页面加载时自动获取已选课程和校区列表
+        const toastEl = document.getElementById('toast');
+        const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+
         window.onload = function() {
             getSelectedCourses();
             loadCampuses();
@@ -261,13 +115,20 @@
         }
 
         function showMessage(text, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.className = 'toast ' + (isError ? 'error' : 'success');
-            toast.textContent = text;
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
+            document.getElementById('toastIcon').className = isError ? 'bi bi-x-circle text-danger me-2' : 'bi bi-check-circle text-success me-2';
+            document.getElementById('toastTitle').textContent = isError ? '错误' : '成功';
+            document.getElementById('toastBody').textContent = text;
+            toast.show();
+        }
+
+        async function logout() {
+            if (!confirm('确定要退出登录吗？')) return;
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (error) {
+                showMessage('退出失败: ' + error.message, true);
+            }
         }
 
         async function refreshCache() {
@@ -292,13 +153,8 @@
             try {
                 const response = await fetch('/search_course', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        course_name: courseName,
-                        campus: campus
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ course_name: courseName, campus: campus })
                 });
 
                 const result = await response.json();
@@ -315,28 +171,36 @@
         function displaySearchResults(courses) {
             const resultsDiv = document.getElementById('searchResults');
             if (courses.length === 0) {
-                resultsDiv.innerHTML = '<p>未找到相关课程</p>';
+                resultsDiv.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>未找到相关课程</p></div>';
                 return;
             }
 
-            let html = '';
+            let html = '<div class="list-group">';
             courses.forEach(course => {
                 html += `
-                    <div class="course-item">
-                        <div style="display: flex; align-items: baseline; gap: 10px;">
-                            <span class="course-name" style="font-size: 1.2em;">${course.name}</span>
-                            <span class="course-code" style="font-size: 0.9em; color: #888;">${course.code}</span>
-                        </div>
-                        <div class="course-info">教师: ${course.teachers}</div>
-                        <div class="course-info">校区: ${course.campus}</div>
-                        <div class="course-info">学分: ${course.credits} | 容量: ${course.capacity} | 已选: ${course.selected || '0'}</div>
-                        <div class="course-info">课程ID: ${course.id}</div>
-                        <div class="course-actions">
-                            <button onclick="selectCourse(${course.id})">选课</button>
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
+                                <small class="text-muted">
+                                    <i class="bi bi-person"></i> ${course.teachers} &nbsp;
+                                    <i class="bi bi-geo-alt"></i> ${course.campus} &nbsp;
+                                    <i class="bi bi-star"></i> ${course.credits}学分
+                                </small>
+                                <div class="mt-1">
+                                    <span class="badge bg-secondary">容量: ${course.capacity}</span>
+                                    <span class="badge bg-info">已选: ${course.selected || '0'}</span>
+                                    <small class="text-muted ms-2">ID: ${course.id}</small>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="selectCourse(${course.id})">
+                                <i class="bi bi-plus-lg"></i> 选课
+                            </button>
                         </div>
                     </div>
                 `;
             });
+            html += '</div>';
             resultsDiv.innerHTML = html;
         }
 
@@ -344,16 +208,12 @@
             try {
                 const response = await fetch('/select_course', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        class_id: classId
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ class_id: classId })
                 });
 
                 const result = await response.json();
-                showMessage(result.message,true);
+                showMessage(result.message, !result.success);
                 if (result.success) {
                     getSelectedCourses();
                 }
@@ -363,19 +223,13 @@
         }
 
         async function dropCourse(classId) {
-            if (!confirm('确定要退课吗？')) {
-                return;
-            }
+            if (!confirm('确定要退课吗？')) return;
 
             try {
                 const response = await fetch('/drop_course', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        class_id: classId
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ class_id: classId })
                 });
 
                 const result = await response.json();
@@ -406,30 +260,41 @@
         function displaySelectedCourses(courses) {
             const selectedDiv = document.getElementById('selectedCourses');
             if (courses.length === 0) {
-                selectedDiv.innerHTML = '<p>暂无已选课程</p>';
+                selectedDiv.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>暂无已选课程</p></div>';
                 return;
             }
 
-            let html = '';
+            let html = '<div class="list-group">';
             courses.forEach(course => {
                 html += `
-                    <div class="course-item">
-                        <div style="display: flex; align-items: baseline; gap: 10px;">
-                            <span class="course-name" style="font-size: 1.2em;">${course.name}</span>
-                            <span class="course-code" style="font-size: 0.9em; color: #888;">${course.code}</span>
-                        </div>
-                        <div class="course-info">教师: ${course.teachers}</div>
-                        <div class="course-info">校区: ${course.campus}</div>
-                        <div class="course-info">学分: ${course.credits} | 容量: ${course.capacity} | 已选: ${course.selected || '0'}</div>
-                        <div class="course-info">课程ID: ${course.id}</div>
-                        <div class="course-actions">
-                            <button onclick="dropCourse(${course.id})" class="btn-danger">退课</button>
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
+                                <small class="text-muted">
+                                    <i class="bi bi-person"></i> ${course.teachers} &nbsp;
+                                    <i class="bi bi-geo-alt"></i> ${course.campus} &nbsp;
+                                    <i class="bi bi-star"></i> ${course.credits}学分
+                                </small>
+                                <div class="mt-1">
+                                    <span class="badge bg-secondary">容量: ${course.capacity}</span>
+                                    <span class="badge bg-info">已选: ${course.selected || '0'}</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-danger btn-sm" onclick="dropCourse(${course.id})">
+                                <i class="bi bi-trash"></i> 退课
+                            </button>
                         </div>
                     </div>
                 `;
             });
+            html += '</div>';
             selectedDiv.innerHTML = html;
         }
+
+        document.getElementById('courseName').addEventListener('keypress', e => {
+            if (e.key === 'Enter') searchCourse();
+        });
     </script>
 </body>
 </html>

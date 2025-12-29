@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 大连理工大学选课系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: #fff;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="d-flex align-items-center">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card shadow-sm border">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-mortarboard-fill text-primary" style="font-size: 3rem;"></i>
+                            <h4 class="mt-2 fw-bold">大连理工大学选课系统</h4>
+                            <p class="text-muted small">请使用统一身份认证登录</p>
+                        </div>
+                        
+                        <!-- 步骤指示器 -->
+                        <div class="d-flex justify-content-center mb-4">
+                            <div class="d-flex align-items-center">
+                                <span class="badge rounded-pill bg-primary" id="stepIcon1" style="width:28px;height:28px;line-height:20px;">1</span>
+                                <div class="bg-secondary mx-2" style="width:40px;height:2px;"></div>
+                                <span class="badge rounded-pill bg-secondary" id="stepIcon2" style="width:28px;height:28px;line-height:20px;">2</span>
+                            </div>
+                        </div>
+                        
+                        <div id="message"></div>
+                        
+                        <!-- 第一步：输入账号密码 -->
+                        <div id="step1">
+                            <div class="mb-3">
+                                <label class="form-label">学号 / 工号</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                    <input type="text" class="form-control" id="userid" placeholder="请输入学号或工号">
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="form-label">密码</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                    <input type="password" class="form-control" id="password" placeholder="请输入统一身份认证密码">
+                                </div>
+                            </div>
+                            
+                            <button type="button" class="btn btn-primary w-100 py-2" id="nextBtn" onclick="fetchTurns()">
+                                下一步 <i class="bi bi-arrow-right"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- 第二步：选择轮次 -->
+                        <div id="step2" class="d-none">
+                            <div class="mb-3">
+                                <label class="form-label">选课轮次</label>
+                                <select class="form-select" id="turnSelect">
+                                    <option value="">加载中...</option>
+                                </select>
+                            </div>
+                            
+                            <button type="button" class="btn btn-primary w-100 py-2 mb-2" id="loginBtn" onclick="handleLogin()">
+                                <i class="bi bi-box-arrow-in-right"></i> 登录
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary w-100" onclick="goBack()">
+                                <i class="bi bi-arrow-left"></i> 返回修改
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let cachedData = null;
+        
+        async function fetchTurns() {
+            const userid = document.getElementById('userid').value.trim();
+            const password = document.getElementById('password').value;
+            const nextBtn = document.getElementById('nextBtn');
+            
+            if (!userid || !password) {
+                showMessage('请填写完整的登录信息', 'danger');
+                return;
+            }
+            
+            nextBtn.disabled = true;
+            nextBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>验证中...';
+            hideMessage();
+            
+            try {
+                const response = await fetch('/api/get_turns', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userid, password })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    cachedData = { userid, password, cookies: result.cookies, stu_id: result.stu_id };
+                    
+                    const select = document.getElementById('turnSelect');
+                    select.innerHTML = '';
+                    result.turns.forEach(turn => {
+                        const option = document.createElement('option');
+                        option.value = turn.id;
+                        option.textContent = turn.nameZh || turn.name || `轮次 ${turn.id}`;
+                        select.appendChild(option);
+                    });
+                    
+                    document.getElementById('step1').classList.add('d-none');
+                    document.getElementById('step2').classList.remove('d-none');
+                    document.getElementById('stepIcon1').classList.remove('bg-primary');
+                    document.getElementById('stepIcon1').classList.add('bg-success');
+                    document.getElementById('stepIcon1').innerHTML = '<i class="bi bi-check"></i>';
+                    document.getElementById('stepIcon2').classList.remove('bg-secondary');
+                    document.getElementById('stepIcon2').classList.add('bg-primary');
+                } else {
+                    showMessage(result.message || '验证失败', 'danger');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'danger');
+            }
+            
+            nextBtn.disabled = false;
+            nextBtn.innerHTML = '下一步 <i class="bi bi-arrow-right"></i>';
+        }
+        
+        async function handleLogin() {
+            const turnId = document.getElementById('turnSelect').value;
+            const loginBtn = document.getElementById('loginBtn');
+            
+            if (!turnId) {
+                showMessage('请选择选课轮次', 'danger');
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>登录中...';
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        userid: cachedData.userid,
+                        password: cachedData.password,
+                        turn_id: parseInt(turnId)
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('登录成功，正在跳转...', 'success');
+                    setTimeout(() => { window.location.href = '/'; }, 1000);
+                } else {
+                    showMessage(result.message || '登录失败', 'danger');
+                    loginBtn.disabled = false;
+                    loginBtn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> 登录';
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'danger');
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> 登录';
+            }
+        }
+        
+        function goBack() {
+            document.getElementById('step2').classList.add('d-none');
+            document.getElementById('step1').classList.remove('d-none');
+            document.getElementById('stepIcon2').classList.remove('bg-primary');
+            document.getElementById('stepIcon2').classList.add('bg-secondary');
+            document.getElementById('stepIcon2').textContent = '2';
+            document.getElementById('stepIcon1').classList.remove('bg-success');
+            document.getElementById('stepIcon1').classList.add('bg-primary');
+            document.getElementById('stepIcon1').textContent = '1';
+            hideMessage();
+        }
+        
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="alert alert-${type} py-2 small">${text}</div>`;
+        }
+        
+        function hideMessage() {
+            document.getElementById('message').innerHTML = '';
+        }
+        
+        document.getElementById('userid').addEventListener('keypress', e => {
+            if (e.key === 'Enter') document.getElementById('password').focus();
+        });
+        document.getElementById('password').addEventListener('keypress', e => {
+            if (e.key === 'Enter') fetchTurns();
+        });
+    </script>
+</body>
+</html>

@@ -3,3 +3,4 @@ config.ini
 .idea
 __pycache__
 .venv
+.vscode
