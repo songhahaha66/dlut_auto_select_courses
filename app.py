@@ -71,7 +71,12 @@ def get_itemList(cookies, turn_id):
     data = json.loads(r.text)
     a = data['itemList'][0]
     url1 = f"http://cdn-dlut.supwisdom.com/student/cache/course-select/addable-lessons/{turn_id}/{a}.json"
-    return json.loads(requests.get(url1, cookies=cookies).text)['data']
+    resp = json.loads(requests.get(url1, cookies=cookies).text)
+    result = resp['data']
+    # 如果 data 是字符串，再解析一次
+    if isinstance(result, str):
+        result = json.loads(result)
+    return result
 
 def select_classes(cookies, stu_id, class_id, turn_id):
     """选课"""
@@ -282,6 +287,10 @@ def search_course():
         
         ilist = login_state['ilist']
         cookies = login_state['cookies']
+        
+        print(f"[DEBUG] ilist 类型: {type(ilist)}")
+        if ilist:
+            print(f"[DEBUG] ilist[0] 类型: {type(ilist[0]) if isinstance(ilist, list) else 'N/A'}")
         
         result = []
         lesson_ids = []
