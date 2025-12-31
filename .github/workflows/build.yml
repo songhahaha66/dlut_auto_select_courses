@@ -1,0 +1,85 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Build with PyInstaller
+        run: pyinstaller --name "DLUT-CourseSelect" --onefile --windowed --add-data "templates;templates" --add-data "img;img" --icon "img/img.png" app.py
+      
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DLUT-CourseSelect-Windows
+          path: dist/DLUT-CourseSelect.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller --name "DLUT-CourseSelect" --onefile --windowed --add-data "templates:templates" --add-data "img:img" app.py
+      
+      - name: Zip macOS app
+        run: |
+          cd dist && zip -r DLUT-CourseSelect-macOS.zip DLUT-CourseSelect.app || zip -r DLUT-CourseSelect-macOS.zip DLUT-CourseSelect
+      
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DLUT-CourseSelect-macOS
+          path: dist/DLUT-CourseSelect-macOS.zip
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: DLUT-CourseSelect-Windows
+          path: ./artifacts
+      
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: DLUT-CourseSelect-macOS
+          path: ./artifacts
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/DLUT-CourseSelect.exe
+            artifacts/DLUT-CourseSelect-macOS.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

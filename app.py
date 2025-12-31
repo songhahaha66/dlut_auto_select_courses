@@ -285,13 +285,24 @@ def search_course():
         
         if lesson_ids:
             selected_numbers = get_selected_numbers(cookies, lesson_ids)
-            for course in result:
-                course_id = str(course['id'])
-                if course_id in selected_numbers:
-                    selected_info = selected_numbers[course_id]
-                    course['selected'] = selected_info.split('-')[0]
-                    course['selected_full'] = selected_info
-                else:
+            # 确保 selected_numbers 是字典类型
+            if isinstance(selected_numbers, dict):
+                for course in result:
+                    course_id = str(course['id'])
+                    if course_id in selected_numbers:
+                        selected_info = selected_numbers[course_id]
+                        if isinstance(selected_info, str):
+                            course['selected'] = selected_info.split('-')[0]
+                            course['selected_full'] = selected_info
+                        else:
+                            course['selected'] = str(selected_info) if selected_info else '0'
+                            course['selected_full'] = '0-0'
+                    else:
+                        course['selected'] = '0'
+                        course['selected_full'] = '0-0'
+            else:
+                # API 返回非字典格式，设置默认值
+                for course in result:
                     course['selected'] = '0'
                     course['selected_full'] = '0-0'
         
@@ -371,13 +382,24 @@ def selected_courses():
         
         if lesson_ids:
             selected_numbers = get_selected_numbers(login_state['cookies'], lesson_ids)
-            for course in courses:
-                course_id = str(course['id'])
-                if course_id in selected_numbers:
-                    selected_info = selected_numbers[course_id]
-                    course['selected'] = selected_info.split('-')[0]
-                    course['selected_full'] = selected_info
-                else:
+            # 确保 selected_numbers 是字典类型
+            if isinstance(selected_numbers, dict):
+                for course in courses:
+                    course_id = str(course['id'])
+                    if course_id in selected_numbers:
+                        selected_info = selected_numbers[course_id]
+                        if isinstance(selected_info, str):
+                            course['selected'] = selected_info.split('-')[0]
+                            course['selected_full'] = selected_info
+                        else:
+                            course['selected'] = str(selected_info) if selected_info else '0'
+                            course['selected_full'] = '0-0'
+                    else:
+                        course['selected'] = '0'
+                        course['selected_full'] = '0-0'
+            else:
+                # API 返回非字典格式，设置默认值
+                for course in courses:
                     course['selected'] = '0'
                     course['selected_full'] = '0-0'
         
@@ -465,5 +487,28 @@ def check_course_availability():
     except Exception as e:
         return jsonify({'success': False, 'message': f'检查课程余量失败: {str(e)}'})
 
+def find_free_port(start_port=5001, max_attempts=10):
+    """找到一个可用的端口"""
+    import socket
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('127.0.0.1', port))
+                return port
+        except OSError:
+            continue
+    return None
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    import webbrowser
+    port = find_free_port(5001)
+    if port:
+        url = f"http://127.0.0.1:{port}/login"
+        print(f"启动服务器: {url}")
+        # 延迟打开浏览器
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        app.run(debug=False, host='0.0.0.0', port=port)
+    else:
+        print("错误: 无法找到可用端口 (5001-5010)")
+        import sys
+        sys.exit(1)

@@ -4,3 +4,7 @@ config.ini
 __pycache__
 .venv
 .vscode
+build
+dist
+.DS_Store
+*.spec
