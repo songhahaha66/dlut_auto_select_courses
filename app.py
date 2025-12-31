@@ -5,9 +5,26 @@ import time
 import dlut_sso
 import requests
 import re
+import os
+import sys
 
 app = Flask(__name__)
 app.secret_key = 'dlut_course_select_secret_key_2024'
+
+def get_data_dir():
+    """获取数据存储目录（用户目录下）"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包后
+        data_dir = os.path.join(os.path.expanduser('~'), '.dlut-course-select')
+    else:
+        # 开发环境
+        data_dir = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+def get_ilist_path():
+    """获取 ilist.json 路径"""
+    return os.path.join(get_data_dir(), 'ilist.json')
 
 # 全局变量存储登录状态
 login_state = {
@@ -158,11 +175,11 @@ def api_login():
         
         # 获取课程列表
         try:
-            with open("ilist.json", "r", encoding="utf-8") as f:
+            with open(get_ilist_path(), "r", encoding="utf-8") as f:
                 ilist = json.load(f)
         except FileNotFoundError:
             ilist = get_itemList(cookies, turn_id)
-            with open("ilist.json", "w", encoding="utf-8") as f:
+            with open(get_ilist_path(), "w", encoding="utf-8") as f:
                 json.dump(ilist, f, ensure_ascii=False, indent=4)
         
         # 保存登录状态
@@ -427,7 +444,7 @@ def refresh_lesson_cache():
     try:
         ilist = get_itemList(login_state['cookies'], login_state['turn_id'])
         login_state['ilist'] = ilist
-        with open("ilist.json", "w", encoding="utf-8") as f:
+        with open(get_ilist_path(), "w", encoding="utf-8") as f:
             json.dump(ilist, f, ensure_ascii=False, indent=4)
         return jsonify({'success': True, 'message': '课程缓存已刷新'})
     except Exception as e:
