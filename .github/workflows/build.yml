@@ -21,7 +21,7 @@ jobs:
         run: pip install -r requirements.txt
       
       - name: Build with PyInstaller
-        run: pyinstaller --name "DLUT-CourseSelect" --onefile --windowed --add-data "templates;templates" --add-data "img;img" --icon "img/img.png" app.py
+        run: pyinstaller --name "DLUT-CourseSelect" --onefile --windowed --add-data "templates;templates" app.py
       
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -43,7 +43,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Build with PyInstaller
-        run: pyinstaller --name "DLUT-CourseSelect" --onefile --windowed --add-data "templates:templates" --add-data "img:img" app.py
+        run: pyinstaller --name "DLUT-CourseSelect" --onefile --windowed --add-data "templates:templates" app.py
       
       - name: Zip macOS app
         run: |
