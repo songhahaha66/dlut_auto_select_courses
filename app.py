@@ -23,8 +23,10 @@ def get_data_dir():
     return data_dir
 
 def get_ilist_path():
-    """获取 ilist.json 路径"""
-    return os.path.join(get_data_dir(), 'ilist.json')
+    """获取 ilist.json 路径（始终存在用户目录）"""
+    cache_dir = os.path.join(os.path.expanduser('~'), '.dlut-course-select')
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, 'ilist.json')
 
 # 全局变量存储登录状态
 login_state = {
