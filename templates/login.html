@@ -62,7 +62,12 @@
                         <!-- 第二步：选择轮次 -->
                         <div id="step2" class="d-none">
                             <div class="mb-3">
-                                <label class="form-label">选课轮次</label>
+                                <label class="form-label d-flex justify-content-between align-items-center">
+                                    选课轮次
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshTurnsBtn" onclick="refreshTurns()">
+                                        <i class="bi bi-arrow-clockwise"></i> 刷新
+                                    </button>
+                                </label>
                                 <select class="form-select" id="turnSelect">
                                     <option value="">加载中...</option>
                                 </select>
@@ -156,8 +161,9 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         userid: cachedData.userid,
-                        password: cachedData.password,
-                        turn_id: parseInt(turnId)
+                        turn_id: parseInt(turnId),
+                        cookies: cachedData.cookies,
+                        stu_id: cachedData.stu_id
                     })
                 });
                 
@@ -188,6 +194,49 @@
             document.getElementById('stepIcon1').classList.add('bg-primary');
             document.getElementById('stepIcon1').textContent = '1';
             hideMessage();
+        }
+        
+        async function refreshTurns() {
+            const refreshBtn = document.getElementById('refreshTurnsBtn');
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            
+            try {
+                const response = await fetch('/api/get_turns', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        userid: cachedData.userid, 
+                        cookies: cachedData.cookies,
+                        stu_id: cachedData.stu_id,
+                        force_refresh: true
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    cachedData.cookies = result.cookies;
+                    cachedData.stu_id = result.stu_id;
+                    
+                    const select = document.getElementById('turnSelect');
+                    select.innerHTML = '';
+                    result.turns.forEach(turn => {
+                        const option = document.createElement('option');
+                        option.value = turn.id;
+                        option.textContent = turn.nameZh || turn.name || `轮次 ${turn.id}`;
+                        select.appendChild(option);
+                    });
+                    showMessage('轮次已刷新', 'success');
+                } else {
+                    showMessage(result.message || '刷新失败', 'danger');
+                }
+            } catch (error) {
+                showMessage('刷新失败: ' + error.message, 'danger');
+            }
+            
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> 刷新';
         }
         
         function showMessage(text, type) {

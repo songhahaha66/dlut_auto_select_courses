@@ -35,6 +35,94 @@ login_state = {
     'ilist': None
 }
 
+# 学生ID缓存 (学号 -> 学生ID)
+stu_id_cache = {}
+# 轮次缓存 (学号 -> 轮次列表)
+turns_cache = {}
+
+def get_stu_id_cache_path():
+    """获取学生ID缓存文件路径（始终存在用户目录）"""
+    cache_dir = os.path.join(os.path.expanduser('~'), '.dlut-course-select')
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, 'stu_id_cache.json')
+
+def get_turns_cache_path():
+    """获取轮次缓存文件路径"""
+    cache_dir = os.path.join(os.path.expanduser('~'), '.dlut-course-select')
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, 'turns_cache.json')
+
+def load_stu_id_cache():
+    """加载学生ID缓存"""
+    global stu_id_cache
+    try:
+        with open(get_stu_id_cache_path(), 'r') as f:
+            stu_id_cache = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        stu_id_cache = {}
+
+def save_stu_id_cache():
+    """保存学生ID缓存"""
+    with open(get_stu_id_cache_path(), 'w') as f:
+        json.dump(stu_id_cache, f)
+
+def load_turns_cache():
+    """加载轮次缓存"""
+    global turns_cache
+    try:
+        with open(get_turns_cache_path(), 'r') as f:
+            turns_cache = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        turns_cache = {}
+
+def save_turns_cache():
+    """保存轮次缓存"""
+    with open(get_turns_cache_path(), 'w') as f:
+        json.dump(turns_cache, f)
+
+# 启动时加载缓存
+load_stu_id_cache()
+load_turns_cache()
+
+# ============ 网络请求重试配置 ============
+
+def create_retry_session(retries=3, backoff_factor=0.5, status_forcelist=(500, 502, 503, 504)):
+    """创建带重试机制的 requests session"""
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        allowed_methods=["HEAD", "GET", "POST", "OPTIONS"]
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+def request_with_retry(method, url, cookies=None, data=None, json_data=None, max_retries=10, timeout=10):
+    """带重试的请求函数"""
+    for attempt in range(max_retries):
+        try:
+            session = create_retry_session()
+            if method.upper() == 'GET':
+                return session.get(url, cookies=cookies, timeout=timeout)
+            else:
+                if json_data:
+                    return session.post(url, json=json_data, cookies=cookies, timeout=timeout)
+                else:
+                    return session.post(url, data=data, cookies=cookies, timeout=timeout)
+        except (requests.exceptions.ConnectionError, 
+                requests.exceptions.ChunkedEncodingError,
+                requests.exceptions.Timeout) as e:
+            print(f"[重试 {attempt + 1}/{max_retries}] {str(e)[:50]}")
+            if attempt == max_retries - 1:
+                raise e
+
 # ============ 核心功能函数 ============
 
 def jw_login(userid, password):
@@ -48,26 +136,56 @@ def jw_login(userid, password):
     s.get("http://jxgl.dlut.edu.cn/student/for-std/course-select")
     return cookies
 
-def get_student_id(cookies):
-    """获取学生ID"""
+def get_student_id(cookies, userid=None):
+    """获取学生ID（优先使用缓存）"""
+    global stu_id_cache
+    
+    # 如果有学号且缓存中存在，直接返回
+    if userid and userid in stu_id_cache:
+        print(f"[缓存命中] 学生ID: {stu_id_cache[userid]}")
+        return stu_id_cache[userid]
+    
+    # 从服务器获取
     url = "http://jxgl.dlut.edu.cn/student/for-std/course-select/single-student/turns"
-    html = requests.get(url, cookies=cookies).text
+    r = request_with_retry('GET', url, cookies=cookies)
+    html = r.text
     match = re.search(r'studentId\s*:\s*(\d+),', html)
     if match:
-        return int(match.group(1))
+        stu_id = int(match.group(1))
+        # 缓存结果
+        if userid:
+            stu_id_cache[userid] = stu_id
+            save_stu_id_cache()
+            print(f"[缓存保存] 学号 {userid} -> 学生ID {stu_id}")
+        return stu_id
     return None
 
-def get_open_turns(cookies, stu_id):
-    """获取所有可用的选课轮次"""
+def get_open_turns(cookies, stu_id, userid=None, force_refresh=False):
+    """获取所有可用的选课轮次（优先使用缓存）"""
+    global turns_cache
+    
+    # 如果有学号且缓存中存在且不强制刷新，直接返回
+    if userid and userid in turns_cache and not force_refresh:
+        print(f"[缓存命中] 轮次列表")
+        return turns_cache[userid]
+    
     url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/open-turns"
     data = {"bizTypeId": "2", "studentId": stu_id}
-    r = requests.post(url, data=data, cookies=cookies)
-    return json.loads(r.text)
+    r = request_with_retry('POST', url, cookies=cookies, data=data)
+    turns = json.loads(r.text)
+    
+    # 缓存结果
+    if userid and turns:
+        turns_cache[userid] = turns
+        save_turns_cache()
+        print(f"[缓存保存] 轮次列表")
+    
+    return turns
 
 def get_itemList(cookies, turn_id):
     """获取课程列表"""
     url = f"http://jxgl.dlut.edu.cn/student/cache/course-select/version/{turn_id}/version.json"
-    r = requests.get(url, cookies=cookies)
+    r = request_with_retry('GET', url, cookies=cookies)
     data = json.loads(r.text)
     a = data['itemList'][0]
     url1 = f"http://cdn-dlut.supwisdom.com/student/cache/course-select/addable-lessons/{turn_id}/{a}.json"
@@ -155,28 +273,30 @@ def login_page():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    """登录API"""
+    """登录API - 使用前端传来的 cookies，不再重复登录"""
     global login_state
     
     try:
         data = request.get_json()
         userid = data.get('userid')
-        password = data.get('password')
-        turn_id = data.get('turn_id')  # 直接使用选择的 turn_id
+        turn_id = data.get('turn_id')
+        cookies = data.get('cookies')  # 从 get_turns 缓存的 cookies
+        stu_id = data.get('stu_id')    # 从 get_turns 缓存的 stu_id
         
-        # 登录
-        cookies = jw_login(userid, password)
-        stu_id = get_student_id(cookies)
-        
-        if not stu_id:
-            return jsonify({'success': False, 'message': '获取学生ID失败'})
-        
-        # 如果没有传 turn_id，获取第一个可用的
-        if not turn_id:
-            turns = get_open_turns(cookies, stu_id)
-            if not turns:
-                return jsonify({'success': False, 'message': '没有可用的选课轮次'})
-            turn_id = turns[0]['id']
+        # 如果没有传 cookies，说明是直接登录（跳过轮次选择）
+        if not cookies:
+            password = data.get('password')
+            cookies = jw_login(userid, password)
+            stu_id = get_student_id(cookies, userid)
+            
+            if not stu_id:
+                return jsonify({'success': False, 'message': '获取学生ID失败'})
+            
+            if not turn_id:
+                turns = get_open_turns(cookies, stu_id, userid)
+                if not turns:
+                    return jsonify({'success': False, 'message': '没有可用的选课轮次'})
+                turn_id = turns[0]['id']
         
         # 获取课程列表
         try:
@@ -208,16 +328,30 @@ def api_get_turns():
         data = request.get_json()
         userid = data.get('userid')
         password = data.get('password')
+        force_refresh = data.get('force_refresh', False)
+        cookies = data.get('cookies')  # 刷新时复用已有 cookies
+        stu_id = data.get('stu_id')
         
-        # 登录获取 cookies
-        cookies = jw_login(userid, password)
-        stu_id = get_student_id(cookies)
-        
-        if not stu_id:
-            return jsonify({'success': False, 'message': '获取学生ID失败，请检查账号密码'})
+        # 如果没有传 cookies，需要登录
+        if not cookies:
+            try:
+                cookies = jw_login(userid, password)
+            except Exception as e:
+                return jsonify({'success': False, 'message': f'SSO登录失败: {str(e)[:100]}'})
+            
+            try:
+                stu_id = get_student_id(cookies, userid)
+            except Exception as e:
+                return jsonify({'success': False, 'message': f'获取学生ID失败: {str(e)[:100]}'})
+            
+            if not stu_id:
+                return jsonify({'success': False, 'message': '获取学生ID失败，请检查账号密码'})
         
         # 获取可用轮次
-        turns = get_open_turns(cookies, stu_id)
+        try:
+            turns = get_open_turns(cookies, stu_id, userid, force_refresh)
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'获取轮次列表失败: {str(e)[:100]}'})
         
         # 格式化返回
         turn_list = []
