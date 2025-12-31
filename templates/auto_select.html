@@ -213,15 +213,24 @@
                             <strong class="ms-2">${op.course_name}</strong>
                             <br><small class="text-muted">ID: ${op.course_id}</small>
                         </div>
-                        <button class="btn btn-outline-danger btn-sm" onclick="removeOperation(${index})" ${isRunning ? 'disabled' : ''}><i class="bi bi-x"></i></button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" data-index="${index}"><i class="bi bi-x"></i></button>
                     </div>
                 </div>`;
             });
             html += '</div>';
             container.innerHTML = html;
+            // 绑定删除按钮事件
+            container.querySelectorAll('button[data-index]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (isRunning) return;
+                    const idx = parseInt(this.getAttribute('data-index'));
+                    operations.splice(idx, 1);
+                    updateOperationList();
+                });
+                btn.disabled = isRunning;
+            });
         }
 
-        function removeOperation(index) { if (isRunning) return; operations.splice(index, 1); updateOperationList(); }
         function clearOperations() { if (isRunning) return; operations = []; currentIndex = 0; updateOperationList(); }
 
         function startQueue() {
