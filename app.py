@@ -189,14 +189,18 @@ def get_itemList(cookies, turn_id):
     url = f"http://jxgl.dlut.edu.cn/student/cache/course-select/version/{turn_id}/version.json"
     r = request_with_retry('GET', url, cookies=cookies)
     data = json.loads(r.text)
-    a = data['itemList'][0]
-    url1 = f"http://cdn-dlut.supwisdom.com/student/cache/course-select/addable-lessons/{turn_id}/{a}.json"
-    resp = json.loads(requests.get(url1, cookies=cookies).text)
-    result = resp['data']
-    # 如果 data 是字符串，再解析一次
-    if isinstance(result, str):
-        result = json.loads(result)
-    return result
+    
+    all_courses = []
+    # 遍历所有分片文件，合并课程数据
+    for item_id in data['itemList']:
+        url1 = f"http://cdn-dlut.supwisdom.com/student/cache/course-select/addable-lessons/{turn_id}/{item_id}.json"
+        resp = json.loads(requests.get(url1, cookies=cookies).text)
+        result = resp['data']
+        # 如果 data 是字符串，再解析一次
+        if isinstance(result, str):
+            result = json.loads(result)
+        all_courses.extend(result)
+    return all_courses
 
 def select_classes(cookies, stu_id, class_id, turn_id):
     """选课"""
