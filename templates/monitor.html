@@ -229,6 +229,7 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="flex-grow-1">
                                 <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
+                                <div class="text-secondary small text-truncate" style="max-width: 280px;" title="${course.className || ''}"><i class="bi bi-people"></i> ${course.className || ''}</div>
                                 <small class="text-muted">${course.teachers} | ${course.campus} | ${course.selected}/${course.capacity}</small>
                             </div>
                             <div class="text-end">

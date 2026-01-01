@@ -428,10 +428,6 @@ def search_course():
         ilist = login_state['ilist']
         cookies = login_state['cookies']
         
-        print(f"[DEBUG] ilist 类型: {type(ilist)}")
-        if ilist:
-            print(f"[DEBUG] ilist[0] 类型: {type(ilist[0]) if isinstance(ilist, list) else 'N/A'}")
-        
         result = []
         lesson_ids = []
         for i in ilist:
@@ -440,6 +436,7 @@ def search_course():
                 teachers = ', '.join([t['nameZh'] for t in i['teachers']])
                 result.append({
                     "name": i['course']['nameZh'],
+                    "className": i.get('nameZh', ''),  # 教学班名称
                     "code": i['code'],
                     "id": i['id'],
                     "teachers": teachers,
@@ -537,6 +534,7 @@ def selected_courses():
             course_campus = course.get('campus', {}).get('nameZh', '') if 'campus' in course else ''
             courses.append({
                 "name": course['course']['nameZh'],
+                "className": course.get('nameZh', ''),  # 教学班名称
                 "code": course['code'],
                 "id": course['id'],
                 "teachers": teachers,
