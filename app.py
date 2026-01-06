@@ -202,26 +202,26 @@ def get_itemList(cookies, turn_id):
         all_courses.extend(result)
     return all_courses
 
-def select_classes(cookies, stu_id, class_id, turn_id):
+def select_classes(cookies, stu_id, class_id, turn_id, schedule_group_id=None):
     """选课"""
     try:
         url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/add-request"
         data = {"studentAssoc": stu_id, "courseSelectTurnAssoc": turn_id,
-                "requestMiddleDtos": [{"lessonAssoc": class_id, "virtualCost": 0, "scheduleGroupAssoc": None}]}
+                "requestMiddleDtos": [{"lessonAssoc": class_id, "virtualCost": 0, "scheduleGroupAssoc": schedule_group_id}]}
         r1 = requests.post(url, json=data, cookies=cookies)
         uuid1 = r1.text
-        
+
         url1 = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/add-drop-response"
         data1 = {"studentId": stu_id, "requestId": uuid1}
         r2 = requests.post(url1, data=data1, cookies=cookies)
-        
+
         if r2.status_code != 200:
             return {"error": f"HTTP错误: {r2.status_code}"}
-        
+
         r2_res = json.loads(r2.text)
         if r2_res is None:
             return {"error": "服务器返回空响应"}
-        
+
         if r2_res.get('success'):
             return True
         else:
@@ -424,16 +424,42 @@ def search_course():
         data = request.get_json()
         course_name = data.get('course_name', '')
         campus = data.get('campus', '')
-        
+
         ilist = login_state['ilist']
         cookies = login_state['cookies']
-        
+
         result = []
         lesson_ids = []
         for i in ilist:
             course_campus = i.get('campus', {}).get('nameZh', '') if 'campus' in i else ''
             if course_name in i['course']['nameZh'] and (not campus or campus == course_campus):
                 teachers = ', '.join([t['nameZh'] for t in i['teachers']])
+
+                # 获取选课组信息
+                schedule_groups = []
+                for group in i.get('scheduleGroups', []):
+                    group_info = {
+                        'id': group['id'],
+                        'no': group.get('no', 0),
+                        'limitCount': group.get('limitCount', 0),
+                        'default': group.get('default', False),
+                        'timeText': ''
+                    }
+
+                    # 简化时间显示
+                    schedules = group.get('schedules', [])
+                    if schedules:
+                        time_parts = []
+                        for schedule in schedules:
+                            weekday = schedule.get('weekday', 0)
+                            start_unit = schedule.get('startUnit', 0)
+                            end_unit = schedule.get('endUnit', 0)
+                            weekday_map = {1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'}
+                            time_parts.append(f"{weekday_map.get(weekday, '')} 第{start_unit}-{end_unit}节")
+                        group_info['timeText'] = '; '.join(time_parts)
+
+                    schedule_groups.append(group_info)
+
                 result.append({
                     "name": i['course']['nameZh'],
                     "className": i.get('nameZh', ''),  # 教学班名称
@@ -442,10 +468,11 @@ def search_course():
                     "teachers": teachers,
                     "credits": i['course']['credits'],
                     "capacity": i['limitCount'],
-                    "campus": course_campus
+                    "campus": course_campus,
+                    "scheduleGroups": schedule_groups  # 添加选课组信息
                 })
                 lesson_ids.append(i['id'])
-        
+
         if lesson_ids:
             selected_numbers = get_selected_numbers(cookies, lesson_ids)
             # 确保 selected_numbers 是字典类型
@@ -468,7 +495,7 @@ def search_course():
                 for course in result:
                     course['selected'] = '0'
                     course['selected_full'] = '0-0'
-        
+
         return jsonify({'success': True, 'courses': result})
     except Exception as e:
         return jsonify({'success': False, 'message': f'搜索失败: {str(e)}'})
@@ -479,14 +506,16 @@ def select_course_route():
     try:
         data = request.get_json()
         class_id = data.get('class_id')
-        
+        schedule_group_id = data.get('schedule_group_id')
+
         result = select_classes(
             login_state['cookies'],
             login_state['stu_id'],
             class_id,
-            login_state['turn_id']
+            login_state['turn_id'],
+            schedule_group_id
         )
-        
+
         if result is True:
             return jsonify({'success': True, 'message': '选课成功'})
         else:
@@ -596,6 +625,67 @@ def refresh_lesson_cache():
         return jsonify({'success': True, 'message': '课程缓存已刷新'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'刷新课程缓存失败: {str(e)}'})
+
+@app.route('/get_schedule_groups', methods=['POST'])
+@require_login
+def get_schedule_groups():
+    """获取课程的选课组列表"""
+    try:
+        data = request.get_json()
+        course_id = data.get('course_id')
+
+        if not course_id:
+            return jsonify({'success': False, 'message': '没有提供课程ID'})
+
+        ilist = login_state['ilist']
+
+        # 查找对应的课程
+        course = None
+        for item in ilist:
+            if item['id'] == course_id:
+                course = item
+                break
+
+        if not course:
+            return jsonify({'success': False, 'message': '未找到该课程'})
+
+        # 获取选课组列表
+        schedule_groups = course.get('scheduleGroups', [])
+
+        # 格式化选课组数据
+        formatted_groups = []
+        for group in schedule_groups:
+            group_info = {
+                'id': group['id'],
+                'no': group.get('no', 0),
+                'limitCount': group.get('limitCount', 0),
+                'default': group.get('default', False),
+                'dateTimePlace': group.get('dateTimePlace', {}).get('textZh', ''),
+                'timeText': ''
+            }
+
+            # 简化时间显示
+            schedules = group.get('schedules', [])
+            if schedules:
+                time_parts = []
+                for schedule in schedules:
+                    weekday = schedule.get('weekday', 0)
+                    start_unit = schedule.get('startUnit', 0)
+                    end_unit = schedule.get('endUnit', 0)
+                    weekday_map = {1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'}
+                    time_parts.append(f"{weekday_map.get(weekday, '')} 第{start_unit}-{end_unit}节")
+                group_info['timeText'] = '; '.join(time_parts)
+
+            formatted_groups.append(group_info)
+
+        return jsonify({
+            'success': True,
+            'schedule_groups': formatted_groups,
+            'course_name': course.get('course', {}).get('nameZh', ''),
+            'class_name': course.get('nameZh', '')
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取选课组失败: {str(e)}'})
 
 @app.route('/check_course_availability', methods=['POST'])
 @require_login

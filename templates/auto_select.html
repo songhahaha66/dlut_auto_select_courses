@@ -170,19 +170,52 @@
             }
             let html = '<div class="list-group list-group-flush">';
             courses.forEach(course => {
+                // 检查是否有多个选课组
+                const scheduleGroups = course.scheduleGroups || [];
+                const hasMultipleGroups = scheduleGroups.length > 1;
+
+                // 生成选课组选择器HTML
+                let groupSelectorHtml = '';
+                if (hasMultipleGroups) {
+                    groupSelectorHtml = `
+                        <div class="mt-2">
+                            <label class="form-label small"><i class="bi bi-calendar-check"></i> 选择选课组:</label>
+                            <select class="form-select form-select-sm" id="scheduleGroup_${course.id}">
+                                ${scheduleGroups.map((group, idx) => `
+                                    <option value="${group.id}" ${group.default ? 'selected' : ''}>
+                                        组${group.no + 1}: ${group.timeText || '时间待定'} (容量:${group.limitCount})
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    `;
+                } else if (scheduleGroups.length === 1) {
+                    // 只有一个选课组，显示时间并创建隐藏的select存储ID
+                    const group = scheduleGroups[0];
+                    groupSelectorHtml = `
+                        <div class="mt-1">
+                            <small class="text-muted"><i class="bi bi-calendar-check"></i> 时间: ${group.timeText || '时间待定'}</small>
+                            <select class="d-none" id="scheduleGroup_${course.id}">
+                                <option value="${group.id}" selected></option>
+                            </select>
+                        </div>
+                    `;
+                }
+
                 html += `<div class="list-group-item px-0">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="flex-grow-1">
                             <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
                             <div class="text-secondary small text-truncate" style="max-width: 280px;" title="${course.className || ''}"><i class="bi bi-people"></i> ${course.className || ''}</div>
                             <small class="text-muted">${course.teachers} | ${course.campus} | ${course.selected}/${course.capacity}</small>
+                            ${groupSelectorHtml}
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             <select class="form-select form-select-sm" id="type_${course.id}" style="width:80px;">
                                 <option value="select" ${defaultType === 'select' ? 'selected' : ''}>选课</option>
                                 <option value="drop" ${defaultType === 'drop' ? 'selected' : ''}>退课</option>
                             </select>
-                            <button class="btn btn-primary btn-sm" onclick="addOperation(${course.id}, '${course.name}')"><i class="bi bi-plus"></i></button>
+                            <button class="btn btn-primary btn-sm" onclick="addOperation(${course.id}, '${course.name}', ${hasMultipleGroups})"><i class="bi bi-plus"></i></button>
                         </div>
                     </div>
                 </div>`;
@@ -191,10 +224,20 @@
             container.innerHTML = html;
         }
 
-        function addOperation(courseId, courseName) {
+        function addOperation(courseId, courseName, hasMultipleGroups = false) {
             const type = document.getElementById(`type_${courseId}`).value;
             if (operations.find(op => op.course_id === courseId && op.type === type)) { alert('该操作已存在'); return; }
-            operations.push({ course_id: courseId, type: type, course_name: courseName });
+
+            let scheduleGroupId = null;
+            if (type === 'select') {
+                // 从选课组选择器获取选中的ID（无论单个还是多个选课组）
+                const selectElement = document.getElementById(`scheduleGroup_${courseId}`);
+                if (selectElement) {
+                    scheduleGroupId = parseInt(selectElement.value);
+                }
+            }
+
+            operations.push({ course_id: courseId, type: type, course_name: courseName, schedule_group_id: scheduleGroupId });
             updateOperationList();
         }
 
@@ -207,12 +250,13 @@
             let html = '<div class="list-group list-group-flush">';
             operations.forEach((op, index) => {
                 const isSelect = op.type === 'select';
+                const scheduleGroupText = op.schedule_group_id ? `<br><small class="text-info">选课组ID: ${op.schedule_group_id}</small>` : '';
                 html += `<div class="list-group-item px-0 ${isSelect ? 'list-group-item-primary' : 'list-group-item-danger'}">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <span class="badge ${isSelect ? 'bg-primary' : 'bg-danger'}">${isSelect ? '选课' : '退课'}</span>
                             <strong class="ms-2">${op.course_name}</strong>
-                            <br><small class="text-muted">ID: ${op.course_id}</small>
+                            <br><small class="text-muted">ID: ${op.course_id}</small>${scheduleGroupText}
                         </div>
                         <button type="button" class="btn btn-outline-danger btn-sm" data-index="${index}"><i class="bi bi-x"></i></button>
                     </div>
@@ -333,9 +377,16 @@
             try {
                 const threadPrefix = threadId ? `线程${threadId}: ` : '';
                 const endpoint = operation.type === 'select' ? '/select_course' : '/drop_course';
+                const requestBody = {class_id: operation.course_id};
+
+                // 如果是选课且有选课组ID，添加到请求中
+                if (operation.type === 'select' && operation.schedule_group_id) {
+                    requestBody.schedule_group_id = operation.schedule_group_id;
+                }
+
                 const response = await fetch(endpoint, {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({class_id: operation.course_id})
+                    body: JSON.stringify(requestBody)
                 });
                 const data = await response.json();
                 const action = operation.type === 'select' ? '选课' : '退课';

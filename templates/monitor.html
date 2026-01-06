@@ -212,18 +212,50 @@
 
         function showCourses(courses) {
             const container = document.getElementById('search_results');
-            
+
             if (courses.length === 0) {
                 container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>未找到课程</p></div>';
                 return;
             }
-            
+
             let html = '<div class="list-group list-group-flush">';
             courses.forEach(course => {
                 const availableSpots = course.capacity - parseInt(course.selected);
                 const statusClass = availableSpots > 0 ? 'text-success' : 'text-danger';
                 const statusText = availableSpots > 0 ? `余量: ${availableSpots}` : '已满';
-                
+
+                // 检查是否有多个选课组
+                const scheduleGroups = course.scheduleGroups || [];
+                const hasMultipleGroups = scheduleGroups.length > 1;
+
+                // 生成选课组选择器HTML
+                let groupSelectorHtml = '';
+                if (hasMultipleGroups) {
+                    groupSelectorHtml = `
+                        <div class="mt-2">
+                            <label class="form-label small"><i class="bi bi-calendar-check"></i> 选择选课组:</label>
+                            <select class="form-select form-select-sm" id="scheduleGroup_${course.id}">
+                                ${scheduleGroups.map((group, idx) => `
+                                    <option value="${group.id}" ${group.default ? 'selected' : ''}>
+                                        组${group.no + 1}: ${group.timeText || '时间待定'} (容量:${group.limitCount})
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    `;
+                } else if (scheduleGroups.length === 1) {
+                    // 只有一个选课组，显示时间并创建隐藏的select存储ID
+                    const group = scheduleGroups[0];
+                    groupSelectorHtml = `
+                        <div class="mt-1">
+                            <small class="text-muted"><i class="bi bi-calendar-check"></i> 时间: ${group.timeText || '时间待定'}</small>
+                            <select class="d-none" id="scheduleGroup_${course.id}">
+                                <option value="${group.id}" selected></option>
+                            </select>
+                        </div>
+                    `;
+                }
+
                 html += `
                     <div class="list-group-item px-0">
                         <div class="d-flex justify-content-between align-items-center">
@@ -231,10 +263,11 @@
                                 <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
                                 <div class="text-secondary small text-truncate" style="max-width: 280px;" title="${course.className || ''}"><i class="bi bi-people"></i> ${course.className || ''}</div>
                                 <small class="text-muted">${course.teachers} | ${course.campus} | ${course.selected}/${course.capacity}</small>
+                                ${groupSelectorHtml}
                             </div>
                             <div class="text-end">
                                 <span class="badge ${availableSpots > 0 ? 'bg-success' : 'bg-danger'} mb-1">${statusText}</span><br>
-                                <button class="btn btn-primary btn-sm" onclick="addToMonitor(${course.id}, '${course.name}', '${course.code}', '${course.teachers}', '${course.campus}', ${course.capacity})">
+                                <button class="btn btn-primary btn-sm" onclick="addToMonitor(${course.id}, '${course.name}', '${course.code}', '${course.teachers}', '${course.campus}', ${course.capacity}, ${hasMultipleGroups})">
                                     <i class="bi bi-plus"></i> 监控
                                 </button>
                             </div>
@@ -246,35 +279,44 @@
             container.innerHTML = html;
         }
 
-        function addToMonitor(courseId, courseName, courseCode, teachers, campus, capacity) {
+        function addToMonitor(courseId, courseName, courseCode, teachers, campus, capacity, hasMultipleGroups = false) {
             if (monitorCourses.find(course => course.id === courseId)) {
                 alert('该课程已在监控列表中');
                 return;
             }
-            
+
+            let scheduleGroupId = null;
+            // 从选课组选择器获取选中的ID（无论单个还是多个选课组）
+            const selectElement = document.getElementById(`scheduleGroup_${courseId}`);
+            if (selectElement) {
+                scheduleGroupId = parseInt(selectElement.value);
+            }
+
             monitorCourses.push({
                 id: courseId, name: courseName, code: courseCode,
                 teachers: teachers, campus: campus, capacity: capacity,
-                selected: 0, available: 0, lastCheck: null
+                selected: 0, available: 0, lastCheck: null,
+                schedule_group_id: scheduleGroupId
             });
-            
+
             updateMonitorList();
             updateStats();
         }
 
         function updateMonitorList() {
             const container = document.getElementById('monitor_list');
-            
+
             if (monitorCourses.length === 0) {
                 container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1"></i><p>暂无监控课程</p></div>';
                 return;
             }
-            
+
             let html = '<div class="list-group list-group-flush">';
             monitorCourses.forEach((course, index) => {
                 const hasAvailable = course.available > 0;
                 const statusText = course.lastCheck ? `${course.selected}/${course.capacity} (余量: ${course.available})` : '未检查';
-                
+                const scheduleGroupText = course.schedule_group_id ? `<br><small class="text-info">选课组ID: ${course.schedule_group_id}</small>` : '';
+
                 html += `
                     <div class="list-group-item px-0 ${hasAvailable ? 'list-group-item-success' : ''}">
                         <div class="d-flex justify-content-between align-items-center">
@@ -282,6 +324,7 @@
                                 <strong>${course.name}</strong>
                                 ${hasAvailable ? '<span class="badge bg-success ms-2">有余量</span>' : ''}
                                 <br><small class="text-muted">ID: ${course.id} | ${course.teachers}</small>
+                                ${scheduleGroupText}
                                 <br><small class="${hasAvailable ? 'text-success' : 'text-muted'}">${statusText}</small>
                             </div>
                             <button class="btn btn-outline-danger btn-sm" onclick="removeFromMonitor(${index})" ${isMonitoring ? 'disabled' : ''}>
@@ -397,18 +440,27 @@
 
         async function attemptAutoSelect(courseId, courseName) {
             try {
+                // 查找监控课程以获取选课组ID
+                const monitorCourse = monitorCourses.find(course => course.id === courseId);
+                const requestBody = {class_id: courseId};
+
+                // 如果有选课组ID，添加到请求中
+                if (monitorCourse && monitorCourse.schedule_group_id) {
+                    requestBody.schedule_group_id = monitorCourse.schedule_group_id;
+                }
+
                 const response = await fetch('/select_course', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({class_id: courseId})
+                    body: JSON.stringify(requestBody)
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     successCount++;
                     updateStats();
                     addLog(`🎉 自动选课成功: ${courseName}`);
-                    
+
                     const index = monitorCourses.findIndex(course => course.id === courseId);
                     if (index !== -1) {
                         monitorCourses.splice(index, 1);
