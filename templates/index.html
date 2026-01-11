@@ -177,11 +177,44 @@
 
             let html = '<div class="list-group">';
             courses.forEach(course => {
+                // 检查是否有多个选课组
+                const scheduleGroups = course.scheduleGroups || [];
+                const hasMultipleGroups = scheduleGroups.length > 1;
+
+                // 生成选课组选择器HTML
+                let groupSelectorHtml = '';
+                if (hasMultipleGroups) {
+                    groupSelectorHtml = `
+                        <div class="mt-2">
+                            <label class="form-label small"><i class="bi bi-calendar-check"></i> 选择选课组:</label>
+                            <select class="form-select form-select-sm" id="scheduleGroup_${course.id}">
+                                ${scheduleGroups.map((group, idx) => `
+                                    <option value="${group.id}" ${group.default ? 'selected' : ''}>
+                                        组${group.no + 1}: ${group.timeText || '时间待定'} (容量:${group.limitCount})
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    `;
+                } else if (scheduleGroups.length === 1) {
+                    // 只有一个选课组，显示时间并创建隐藏的select存储ID
+                    const group = scheduleGroups[0];
+                    groupSelectorHtml = `
+                        <div class="mt-1">
+                            <small class="text-muted"><i class="bi bi-calendar-check"></i> 时间: ${group.timeText || '时间待定'}</small>
+                            <select class="d-none" id="scheduleGroup_${course.id}">
+                                <option value="${group.id}" selected></option>
+                            </select>
+                        </div>
+                    `;
+                }
+
                 html += `
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
+                                <div class="text-secondary mb-1 text-truncate" style="max-width: 280px;" title="${course.className || ''}"><i class="bi bi-people"></i> ${course.className || ''}</div>
                                 <small class="text-muted">
                                     <i class="bi bi-person"></i> ${course.teachers} &nbsp;
                                     <i class="bi bi-geo-alt"></i> ${course.campus} &nbsp;
@@ -192,8 +225,9 @@
                                     <span class="badge bg-info">已选: ${course.selected || '0'}</span>
                                     <small class="text-muted ms-2">ID: ${course.id}</small>
                                 </div>
+                                ${groupSelectorHtml}
                             </div>
-                            <button class="btn btn-primary btn-sm" onclick="selectCourse(${course.id})">
+                            <button class="btn btn-primary btn-sm" onclick="selectCourse(${course.id}, ${hasMultipleGroups})">
                                 <i class="bi bi-plus-lg"></i> 选课
                             </button>
                         </div>
@@ -204,12 +238,23 @@
             resultsDiv.innerHTML = html;
         }
 
-        async function selectCourse(classId) {
+        async function selectCourse(classId, hasMultipleGroups = false) {
             try {
+                let scheduleGroupId = null;
+
+                // 从选课组选择器获取选中的ID（无论单个还是多个选课组）
+                const selectElement = document.getElementById(`scheduleGroup_${classId}`);
+                if (selectElement) {
+                    scheduleGroupId = parseInt(selectElement.value);
+                }
+
                 const response = await fetch('/select_course', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ class_id: classId })
+                    body: JSON.stringify({
+                        class_id: classId,
+                        schedule_group_id: scheduleGroupId
+                    })
                 });
 
                 const result = await response.json();
@@ -271,6 +316,7 @@
                         <div class="d-flex justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
+                                <div class="text-secondary mb-1 text-truncate" style="max-width: 280px;" title="${course.className || ''}"><i class="bi bi-people"></i> ${course.className || ''}</div>
                                 <small class="text-muted">
                                     <i class="bi bi-person"></i> ${course.teachers} &nbsp;
                                     <i class="bi bi-geo-alt"></i> ${course.campus} &nbsp;
