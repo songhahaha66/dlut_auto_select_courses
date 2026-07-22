@@ -546,6 +546,54 @@ def drop_course_route():
     except Exception as e:
         return jsonify({'success': False, 'message': f'退课失败: {str(e)}'})
 
+@app.route('/auto_select_with_drop', methods=['POST'])
+@require_login
+def auto_select_with_drop_route():
+    """自动选课前先退课：先退掉指定课程，再选目标课程"""
+    try:
+        data = request.get_json()
+        class_id = data.get('class_id')           # 要选的课
+        drop_class_id = data.get('drop_class_id')  # 要先退的课
+        schedule_group_id = data.get('schedule_group_id')  # 选课组ID
+
+        if not class_id:
+            return jsonify({'success': False, 'message': '缺少目标课程ID'})
+        if not drop_class_id:
+            return jsonify({'success': False, 'message': '缺少要退的课程ID'})
+
+        cookies = login_state['cookies']
+        stu_id = login_state['stu_id']
+        turn_id = login_state['turn_id']
+
+        # 第一步：退课
+        drop_result = drop_classes(cookies, stu_id, drop_class_id, turn_id)
+        if drop_result is not True:
+            error_msg = str(drop_result.get('error', drop_result)) if isinstance(drop_result, dict) else str(drop_result)
+            return jsonify({
+                'success': False,
+                'message': f'退课失败（未执行选课）: {error_msg}',
+                'step': 'drop'
+            })
+
+        # 第二步：选课
+        select_result = select_classes(cookies, stu_id, class_id, turn_id, schedule_group_id)
+        if select_result is True:
+            return jsonify({
+                'success': True,
+                'message': '退课并选课成功',
+                'step': 'done'
+            })
+        else:
+            error_msg = str(select_result.get('error', select_result)) if isinstance(select_result, dict) else str(select_result)
+            return jsonify({
+                'success': False,
+                'message': f'退课成功，但选课失败: {error_msg}',
+                'step': 'select'
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'操作失败: {str(e)}'})
+
 @app.route('/selected_courses')
 @require_login
 def selected_courses():
