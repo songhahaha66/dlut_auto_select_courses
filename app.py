@@ -424,6 +424,14 @@ def search_course():
         data = request.get_json()
         course_name = data.get('course_name', '')
         campus = data.get('campus', '')
+        course_code = data.get('course_code', '')
+        class_name = data.get('class_name', '')
+        teacher = data.get('teacher', '')
+        course_type = data.get('course_type', '')
+        course_property = data.get('course_property', '')
+        admin_class = data.get('admin_class', '')
+        compulsory = data.get('compulsory', '')
+        only_available = data.get('only_available', False)
 
         ilist = login_state['ilist']
         cookies = login_state['cookies']
@@ -432,46 +440,86 @@ def search_course():
         lesson_ids = []
         for i in ilist:
             course_campus = i.get('campus', {}).get('nameZh', '') if 'campus' in i else ''
-            if course_name in i['course']['nameZh'] and (not campus or campus == course_campus):
-                teachers = ', '.join([t['nameZh'] for t in i['teachers']])
 
-                # 获取选课组信息
-                schedule_groups = []
-                for group in i.get('scheduleGroups', []):
-                    group_info = {
-                        'id': group['id'],
-                        'no': group.get('no', 0),
-                        'limitCount': group.get('limitCount', 0),
-                        'default': group.get('default', False),
-                        'timeText': ''
-                    }
+            # 课程名称筛选（已有）
+            if course_name and course_name not in i['course']['nameZh']:
+                continue
+            # 校区筛选（已有）
+            if campus and campus != course_campus:
+                continue
+            # 课程代码/教学班代码筛选
+            if course_code:
+                lesson_code = i.get('code', '')
+                course_code_val = i.get('course', {}).get('code', '')
+                if course_code not in lesson_code and course_code not in course_code_val:
+                    continue
+            # 教学班名称筛选
+            if class_name and class_name not in i.get('nameZh', ''):
+                continue
+            # 授课教师筛选
+            if teacher:
+                teachers_str = ','.join(t.get('nameZh', '') for t in i.get('teachers', []))
+                if teacher not in teachers_str:
+                    continue
+            # 课程类型筛选
+            if course_type and course_type != i.get('courseType', {}).get('nameZh', ''):
+                continue
+            # 课程性质筛选
+            if course_property and course_property != i.get('courseProperty', {}).get('nameZh', ''):
+                continue
+            # 方案内课程筛选（按行政班）
+            if admin_class:
+                attend_classes = [a.get('nameZh', '') for a in i.get('attendAdminclasses', [])]
+                if attend_classes and admin_class not in attend_classes:
+                    continue
+            # 必修/选修筛选
+            if compulsory:
+                compulsorys = i.get('compulsorys', [])
+                if compulsory not in compulsorys:
+                    continue
 
-                    # 简化时间显示
-                    schedules = group.get('schedules', [])
-                    if schedules:
-                        time_parts = []
-                        for schedule in schedules:
-                            weekday = schedule.get('weekday', 0)
-                            start_unit = schedule.get('startUnit', 0)
-                            end_unit = schedule.get('endUnit', 0)
-                            weekday_map = {1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'}
-                            time_parts.append(f"{weekday_map.get(weekday, '')} 第{start_unit}-{end_unit}节")
-                        group_info['timeText'] = '; '.join(time_parts)
+            teachers = ', '.join([t['nameZh'] for t in i['teachers']])
 
-                    schedule_groups.append(group_info)
+            # 获取选课组信息
+            schedule_groups = []
+            for group in i.get('scheduleGroups', []):
+                group_info = {
+                    'id': group['id'],
+                    'no': group.get('no', 0),
+                    'limitCount': group.get('limitCount', 0),
+                    'default': group.get('default', False),
+                    'timeText': ''
+                }
 
-                result.append({
-                    "name": i['course']['nameZh'],
-                    "className": i.get('nameZh', ''),  # 教学班名称
-                    "code": i['code'],
-                    "id": i['id'],
-                    "teachers": teachers,
-                    "credits": i['course']['credits'],
-                    "capacity": i['limitCount'],
-                    "campus": course_campus,
-                    "scheduleGroups": schedule_groups  # 添加选课组信息
-                })
-                lesson_ids.append(i['id'])
+                # 简化时间显示
+                schedules = group.get('schedules', [])
+                if schedules:
+                    time_parts = []
+                    for schedule in schedules:
+                        weekday = schedule.get('weekday', 0)
+                        start_unit = schedule.get('startUnit', 0)
+                        end_unit = schedule.get('endUnit', 0)
+                        weekday_map = {1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'}
+                        time_parts.append(f"{weekday_map.get(weekday, '')} 第{start_unit}-{end_unit}节")
+                    group_info['timeText'] = '; '.join(time_parts)
+
+                schedule_groups.append(group_info)
+
+            result.append({
+                "name": i['course']['nameZh'],
+                "className": i.get('nameZh', ''),  # 教学班名称
+                "code": i['code'],
+                "id": i['id'],
+                "teachers": teachers,
+                "credits": i['course']['credits'],
+                "capacity": i['limitCount'],
+                "campus": course_campus,
+                "scheduleGroups": schedule_groups,  # 添加选课组信息
+                "courseType": i.get('courseType', {}).get('nameZh', ''),
+                "courseProperty": i.get('courseProperty', {}).get('nameZh', ''),
+                "compulsorys": i.get('compulsorys', [])
+            })
+            lesson_ids.append(i['id'])
 
         if lesson_ids:
             selected_numbers = get_selected_numbers(cookies, lesson_ids)
@@ -495,6 +543,20 @@ def search_course():
                 for course in result:
                     course['selected'] = '0'
                     course['selected_full'] = '0-0'
+
+            # 计算余量并处理仅显示有余量的筛选
+            if only_available:
+                filtered_result = []
+                for course in result:
+                    selected_count = int(course.get('selected', '0'))
+                    course['available'] = course['capacity'] - selected_count
+                    if course['available'] > 0:
+                        filtered_result.append(course)
+                result = filtered_result
+            else:
+                for course in result:
+                    selected_count = int(course.get('selected', '0'))
+                    course['available'] = course['capacity'] - selected_count
 
         return jsonify({'success': True, 'courses': result})
     except Exception as e:
@@ -612,6 +674,51 @@ def get_campuses():
         return jsonify({'success': True, 'campuses': sorted(list(campuses))})
     except Exception as e:
         return jsonify({'success': False, 'message': f'获取校区失败: {str(e)}'})
+
+@app.route('/get_course_types')
+@require_login
+def get_course_types():
+    """获取所有课程类型"""
+    try:
+        ilist = login_state['ilist']
+        types = set()
+        for i in ilist:
+            ct = i.get('courseType')
+            if ct and ct.get('nameZh'):
+                types.add(ct['nameZh'])
+        return jsonify({'success': True, 'types': sorted(list(types))})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取课程类型失败: {str(e)}'})
+
+@app.route('/get_course_properties')
+@require_login
+def get_course_properties():
+    """获取所有课程性质"""
+    try:
+        ilist = login_state['ilist']
+        properties = set()
+        for i in ilist:
+            cp = i.get('courseProperty')
+            if cp and cp.get('nameZh'):
+                properties.add(cp['nameZh'])
+        return jsonify({'success': True, 'properties': sorted(list(properties))})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取课程性质失败: {str(e)}'})
+
+@app.route('/get_admin_classes')
+@require_login
+def get_admin_classes():
+    """获取所有行政班（用于方案内课程筛选）"""
+    try:
+        ilist = login_state['ilist']
+        classes = set()
+        for i in ilist:
+            for a in i.get('attendAdminclasses', []):
+                if a.get('nameZh'):
+                    classes.add(a['nameZh'])
+        return jsonify({'success': True, 'classes': sorted(list(classes))})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取行政班失败: {str(e)}'})
 
 @app.route("/refresh_lesson_cache", methods=['GET'])
 @require_login

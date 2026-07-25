@@ -34,13 +34,67 @@
                         <h5 class="mb-0"><i class="bi bi-search text-primary me-2"></i>搜索课程</h5>
                     </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label">课程名称</label>
-                            <input type="text" class="form-control" id="search_input" placeholder="输入课程名称...">
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small">课程名称</label>
+                                <input type="text" class="form-control form-control-sm" id="search_input" placeholder="输入课程名称">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">课程代码</label>
+                                <input type="text" class="form-control form-control-sm" id="courseCode" placeholder="输入课程代码">
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">校区筛选</label>
-                            <select class="form-select" id="campus_filter"><option value="">所有校区</option></select>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small">教学班名称</label>
+                                <input type="text" class="form-control form-control-sm" id="className" placeholder="输入教学班名称">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">授课教师</label>
+                                <input type="text" class="form-control form-control-sm" id="teacherName" placeholder="输入教师姓名">
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-4">
+                                <label class="form-label small">校区</label>
+                                <select class="form-select form-select-sm" id="campus_filter">
+                                    <option value="">全部</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">课程类型</label>
+                                <select class="form-select form-select-sm" id="courseTypeSelect">
+                                    <option value="">全部</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">课程性质</label>
+                                <select class="form-select form-select-sm" id="coursePropertySelect">
+                                    <option value="">全部</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-4">
+                                <label class="form-label small">方案内行政班</label>
+                                <select class="form-select form-select-sm" id="adminClassSelect">
+                                    <option value="">全部</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">必修/选修</label>
+                                <select class="form-select form-select-sm" id="compulsorySelect">
+                                    <option value="">全部</option>
+                                    <option value="COMPULSORY">必修</option>
+                                    <option value="ELECTIVE">选修</option>
+                                </select>
+                            </div>
+                            <div class="col-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="onlyAvailable">
+                                    <label class="form-check-label small" for="onlyAvailable">仅显示有余量</label>
+                                </div>
+                            </div>
                         </div>
                         <div class="d-flex gap-2">
                             <button class="btn btn-primary flex-grow-1" onclick="searchCourses()"><i class="bi bi-search"></i> 搜索</button>
@@ -116,7 +170,8 @@
         let operations = [], isRunning = false, currentIndex = 0, queueInterval = null, statusHistory = [], scheduleTimeout = null, isScheduled = false;
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadCampuses(); updateOperationList(); initStatusDisplay(); updateCurrentTime();
+            loadCampuses(); loadCourseTypes(); loadCourseProperties(); loadAdminClasses();
+            updateOperationList(); initStatusDisplay(); updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
             document.getElementById('concurrencyMode').addEventListener('change', function() {
                 document.getElementById('threadSettings').style.display = this.value === 'parallel' ? 'block' : 'none';
@@ -138,14 +193,76 @@
             } catch (error) { console.error('加载校区失败:', error); }
         }
 
+        async function loadCourseTypes() {
+            try {
+                const response = await fetch('/get_course_types');
+                const data = await response.json();
+                if (data.success) {
+                    const select = document.getElementById('courseTypeSelect');
+                    data.types.forEach(t => {
+                        const option = document.createElement('option');
+                        option.value = t; option.textContent = t;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) { console.error('加载课程类型失败:', error); }
+        }
+
+        async function loadCourseProperties() {
+            try {
+                const response = await fetch('/get_course_properties');
+                const data = await response.json();
+                if (data.success) {
+                    const select = document.getElementById('coursePropertySelect');
+                    data.properties.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p; option.textContent = p;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) { console.error('加载课程性质失败:', error); }
+        }
+
+        async function loadAdminClasses() {
+            try {
+                const response = await fetch('/get_admin_classes');
+                const data = await response.json();
+                if (data.success) {
+                    const select = document.getElementById('adminClassSelect');
+                    data.classes.forEach(c => {
+                        const option = document.createElement('option');
+                        option.value = c; option.textContent = c;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) { console.error('加载行政班失败:', error); }
+        }
+
         async function searchCourses() {
             const courseName = document.getElementById('search_input').value.trim();
             const campus = document.getElementById('campus_filter').value;
-            if (!courseName) { alert('请输入课程名称'); return; }
+            const courseCode = document.getElementById('courseCode').value.trim();
+            const className = document.getElementById('className').value.trim();
+            const teacherName = document.getElementById('teacherName').value.trim();
+            const courseType = document.getElementById('courseTypeSelect').value;
+            const courseProperty = document.getElementById('coursePropertySelect').value;
+            const adminClass = document.getElementById('adminClassSelect').value;
+            const compulsory = document.getElementById('compulsorySelect').value;
+            const onlyAvailable = document.getElementById('onlyAvailable').checked;
+
+            if (!courseName && !courseCode && !className && !teacherName && !campus && !courseType && !courseProperty && !adminClass && !compulsory) {
+                alert('请至少输入一个搜索条件'); return;
+            }
             try {
                 const response = await fetch('/search_course', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({course_name: courseName, campus: campus})
+                    body: JSON.stringify({
+                        course_name: courseName, campus: campus,
+                        course_code: courseCode, class_name: className,
+                        teacher: teacherName, course_type: courseType,
+                        course_property: courseProperty, admin_class: adminClass,
+                        compulsory: compulsory, only_available: onlyAvailable
+                    })
                 });
                 const data = await response.json();
                 if (data.success) showCourses(data.courses, 'select');
@@ -208,6 +325,8 @@
                             <h6 class="mb-1">${course.name} <small class="text-muted">${course.code}</small></h6>
                             <div class="text-secondary small text-truncate" style="max-width: 280px;" title="${course.className || ''}"><i class="bi bi-people"></i> ${course.className || ''}</div>
                             <small class="text-muted">${course.teachers} | ${course.campus} | ${course.selected}/${course.capacity}</small>
+                            ${course.available !== undefined ? `<span class="badge ${course.available > 0 ? 'bg-success' : 'bg-danger'} ms-1">余量:${course.available}</span>` : ''}
+                            ${course.courseType ? `<br><small class="text-muted"><i class="bi bi-tag"></i> ${course.courseType} | ${course.courseProperty || ''}</small>` : ''}
                             ${groupSelectorHtml}
                         </div>
                         <div class="d-flex align-items-center gap-2">
