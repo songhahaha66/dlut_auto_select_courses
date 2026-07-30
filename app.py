@@ -462,15 +462,15 @@ def search_course():
                 if teacher not in teachers_str:
                     continue
             # 课程类型筛选
-            if course_type and course_type != i.get('courseType', {}).get('nameZh', ''):
+            if course_type and course_type != (i.get('courseType') or {}).get('nameZh', ''):
                 continue
             # 课程性质筛选
-            if course_property and course_property != i.get('courseProperty', {}).get('nameZh', ''):
+            if course_property and course_property != (i.get('courseProperty') or {}).get('nameZh', ''):
                 continue
             # 方案内课程筛选（按行政班）
             if admin_class:
                 attend_classes = [a.get('nameZh', '') for a in i.get('attendAdminclasses', [])]
-                if attend_classes and admin_class not in attend_classes:
+                if admin_class not in attend_classes:
                     continue
             # 必修/选修筛选
             if compulsory:
@@ -515,14 +515,21 @@ def search_course():
                 "capacity": i['limitCount'],
                 "campus": course_campus,
                 "scheduleGroups": schedule_groups,  # 添加选课组信息
-                "courseType": i.get('courseType', {}).get('nameZh', ''),
-                "courseProperty": i.get('courseProperty', {}).get('nameZh', ''),
+                "courseType": (i.get('courseType') or {}).get('nameZh', ''),
+                "courseProperty": (i.get('courseProperty') or {}).get('nameZh', ''),
                 "compulsorys": i.get('compulsorys', [])
             })
             lesson_ids.append(i['id'])
 
         if lesson_ids:
-            selected_numbers = get_selected_numbers(cookies, lesson_ids)
+            # 分批查询选课人数，每批 300 个，避免一次请求过多导致超时
+            batch_size = 300
+            selected_numbers = {}
+            for batch_start in range(0, len(lesson_ids), batch_size):
+                batch_ids = lesson_ids[batch_start:batch_start + batch_size]
+                batch_result = get_selected_numbers(cookies, batch_ids)
+                if isinstance(batch_result, dict):
+                    selected_numbers.update(batch_result)
             # 确保 selected_numbers 是字典类型
             if isinstance(selected_numbers, dict):
                 for course in result:

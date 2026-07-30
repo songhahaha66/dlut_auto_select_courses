@@ -77,9 +77,8 @@
                         <div class="row g-2 mb-2">
                             <div class="col-4">
                                 <label class="form-label small">方案内行政班</label>
-                                <select class="form-select form-select-sm" id="adminClassSelect">
-                                    <option value="">全部</option>
-                                </select>
+                                <input type="text" class="form-control form-control-sm" id="adminClassSelect" list="adminClassList" placeholder="输入或选择行政班">
+                                <datalist id="adminClassList"></datalist>
                             </div>
                             <div class="col-4">
                                 <label class="form-label small">必修/选修</label>
@@ -228,11 +227,11 @@
                 const response = await fetch('/get_admin_classes');
                 const data = await response.json();
                 if (data.success) {
-                    const select = document.getElementById('adminClassSelect');
+                    const datalist = document.getElementById('adminClassList');
                     data.classes.forEach(c => {
                         const option = document.createElement('option');
-                        option.value = c; option.textContent = c;
-                        select.appendChild(option);
+                        option.value = c;
+                        datalist.appendChild(option);
                     });
                 }
             } catch (error) { console.error('加载行政班失败:', error); }
@@ -250,7 +249,7 @@
             const compulsory = document.getElementById('compulsorySelect').value;
             const onlyAvailable = document.getElementById('onlyAvailable').checked;
 
-            if (!courseName && !courseCode && !className && !teacherName && !campus && !courseType && !courseProperty && !adminClass && !compulsory) {
+            if (!courseName && !courseCode && !className && !teacherName && !campus && !courseType && !courseProperty && !adminClass && !compulsory && !onlyAvailable) {
                 alert('请至少输入一个搜索条件'); return;
             }
             try {
