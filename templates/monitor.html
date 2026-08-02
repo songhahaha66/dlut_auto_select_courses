@@ -175,6 +175,42 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 先退课再选课配置 -->
+                        <div class="card bg-light mb-3 border">
+                            <div class="card-body py-2 px-3">
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" id="enableDropFirst" onchange="toggleDropFirst()">
+                                    <label class="form-check-label fw-bold" for="enableDropFirst">
+                                        <i class="bi bi-arrow-repeat text-warning"></i> 自动选课前先退课
+                                    </label>
+                                </div>
+                                <div id="dropFirstSettings" style="display: none;">
+                                    <div class="input-group input-group-sm mt-2">
+                                        <input type="text" class="form-control" id="drop_course_search" placeholder="输入要退的课程名称...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="searchDropCourse()">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" type="button" onclick="loadSelectedForDrop()" title="从已选课程中选择">
+                                            <i class="bi bi-bookmark"></i>
+                                        </button>
+                                    </div>
+                                    <div id="drop_search_results" class="mt-1" style="max-height: 150px; overflow-y: auto;"></div>
+                                    <div id="selected_drop_course" class="mt-2" style="display: none;">
+                                        <div class="d-flex justify-content-between align-items-center bg-warning bg-opacity-10 rounded p-2">
+                                            <div>
+                                                <small class="text-muted">将先退课:</small>
+                                                <strong id="drop_course_name" class="ms-1"></strong>
+                                                <br><small class="text-muted" id="drop_course_info"></small>
+                                            </div>
+                                            <button class="btn btn-outline-danger btn-sm" onclick="clearDropCourse()">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         
                         <div id="monitor_list" style="max-height: 300px; overflow-y: auto;">
                             <div class="text-center text-muted py-4">
@@ -210,6 +246,10 @@
         let checkCount = 0;
         let successCount = 0;
 
+        // 先退课再选课相关
+        let dropCourseId = null;
+        let dropCourseName = '';
+
         document.addEventListener('DOMContentLoaded', function() {
             loadCampuses();
             loadCourseTypes();
@@ -218,6 +258,89 @@
             updateMonitorList();
             initLogDisplay();
         });
+
+        function toggleDropFirst() {
+            const enabled = document.getElementById('enableDropFirst').checked;
+            document.getElementById('dropFirstSettings').style.display = enabled ? 'block' : 'none';
+            if (!enabled) {
+                clearDropCourse();
+            }
+        }
+
+        async function searchDropCourse() {
+            const courseName = document.getElementById('drop_course_search').value.trim();
+            if (!courseName) {
+                alert('请输入要退的课程名称');
+                return;
+            }
+            try {
+                const response = await fetch('/search_course', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({course_name: courseName, campus: ''})
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showDropCourses(data.courses);
+                } else {
+                    alert('搜索失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('搜索出错: ' + error.message);
+            }
+        }
+
+        async function loadSelectedForDrop() {
+            try {
+                const response = await fetch('/selected_courses');
+                const data = await response.json();
+                if (data.success) {
+                    showDropCourses(data.courses);
+                } else {
+                    alert('加载失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('加载出错: ' + error.message);
+            }
+        }
+
+        function showDropCourses(courses) {
+            const container = document.getElementById('drop_search_results');
+            if (courses.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted small py-2">未找到课程</div>';
+                return;
+            }
+            let html = '<div class="list-group list-group-flush">';
+            courses.forEach(course => {
+                html += `
+                    <div class="list-group-item list-group-item-action py-1 px-2" style="cursor:pointer;" onclick="selectDropCourse(${course.id}, '${course.name.replace(/'/g, "\\'")}', '${course.code || ''}', '${(course.teachers || '').replace(/'/g, "\\'")}')">
+                        <small><strong>${course.name}</strong> <span class="text-muted">${course.code || ''}</span></small>
+                        <br><small class="text-muted">ID: ${course.id} | ${course.teachers || ''} | ${course.campus || ''}</small>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function selectDropCourse(courseId, courseName, courseCode, teachers) {
+            dropCourseId = courseId;
+            dropCourseName = courseName;
+            document.getElementById('selected_drop_course').style.display = 'block';
+            document.getElementById('drop_course_name').textContent = courseName;
+            document.getElementById('drop_course_info').textContent = `ID: ${courseId} | ${teachers} | ${courseCode}`;
+            document.getElementById('drop_search_results').innerHTML = '';
+            addLog(`📋 已设置先退课: ${courseName} (ID: ${courseId})`);
+        }
+
+        function clearDropCourse(silent = false) {
+            dropCourseId = null;
+            dropCourseName = '';
+            document.getElementById('selected_drop_course').style.display = 'none';
+            document.getElementById('drop_search_results').innerHTML = '';
+            document.getElementById('drop_course_search').value = '';
+            if (!silent) addLog('📋 已取消先退课设置');
+        }
 
         async function loadCampuses() {
             try {
@@ -571,7 +694,21 @@
                     requestBody.schedule_group_id = monitorCourse.schedule_group_id;
                 }
 
-                const response = await fetch('/select_course', {
+                // 判断是否需要先退课再选课（固化到局部变量，避免请求期间界面变动导致状态错乱）
+                const useDropFirst = document.getElementById('enableDropFirst').checked && dropCourseId !== null;
+                let endpoint, actionDesc;
+
+                if (useDropFirst) {
+                    endpoint = '/auto_select_with_drop';
+                    requestBody.drop_class_id = dropCourseId;
+                    actionDesc = `先退 ${dropCourseName}(ID:${dropCourseId}) → 再选 ${courseName}`;
+                    addLog(`🔄 ${actionDesc}`);
+                } else {
+                    endpoint = '/select_course';
+                    actionDesc = `选课: ${courseName}`;
+                }
+
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(requestBody)
@@ -581,7 +718,13 @@
                 if (data.success) {
                     successCount++;
                     updateStats();
-                    addLog(`🎉 自动选课成功: ${courseName}`);
+                    if (useDropFirst) {
+                        addLog(`🎉 ${courseName}: ${data.message}`);
+                        // 退课设置已被消耗，清除，避免后续课程再去退一门不存在的课
+                        clearDropCourse(true);
+                    } else {
+                        addLog(`🎉 自动选课成功: ${courseName}`);
+                    }
 
                     const index = monitorCourses.findIndex(course => course.id === courseId);
                     if (index !== -1) {
@@ -627,6 +770,10 @@
 
         document.getElementById('search_input').addEventListener('keypress', e => {
             if (e.key === 'Enter') searchCourses();
+        });
+
+        document.getElementById('drop_course_search').addEventListener('keypress', e => {
+            if (e.key === 'Enter') searchDropCourse();
         });
     </script>
 </body>

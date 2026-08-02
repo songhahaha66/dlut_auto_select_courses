@@ -615,6 +615,57 @@ def drop_course_route():
     except Exception as e:
         return jsonify({'success': False, 'message': f'退课失败: {str(e)}'})
 
+@app.route('/auto_select_with_drop', methods=['POST'])
+@require_login
+def auto_select_with_drop_route():
+    """自动选课前先退课：退课失败不中断（课可能本来就没选），选课失败时尝试选回原课程"""
+    try:
+        data = request.get_json()
+        class_id = data.get('class_id')           # 要选的课
+        drop_class_id = data.get('drop_class_id')  # 要先退的课
+        schedule_group_id = data.get('schedule_group_id')  # 选课组ID
+
+        if not class_id:
+            return jsonify({'success': False, 'message': '缺少目标课程ID'})
+        if not drop_class_id:
+            return jsonify({'success': False, 'message': '缺少要退的课程ID'})
+        if class_id == drop_class_id:
+            return jsonify({'success': False, 'message': '要退的课程与目标课程相同'})
+
+        cookies = login_state['cookies']
+        stu_id = login_state['stu_id']
+        turn_id = login_state['turn_id']
+
+        def error_text(result):
+            return str(result.get('error', result)) if isinstance(result, dict) else str(result)
+
+        # 第一步：退课。失败不中断（比如这门课本来就没选/已退掉），继续尝试选课
+        drop_result = drop_classes(cookies, stu_id, drop_class_id, turn_id)
+        dropped = drop_result is True
+
+        # 第二步：选课
+        select_result = select_classes(cookies, stu_id, class_id, turn_id, schedule_group_id)
+        if select_result is True:
+            if dropped:
+                return jsonify({'success': True, 'message': '退课并选课成功'})
+            return jsonify({'success': True, 'message': f'选课成功（退课未执行: {error_text(drop_result)}）'})
+
+        error_msg = error_text(select_result)
+        if not dropped:
+            return jsonify({'success': False, 'message': f'选课失败: {error_msg}'})
+
+        # 退了课但没选上，尝试选回原课程，避免两头落空
+        restore_result = select_classes(cookies, stu_id, drop_class_id, turn_id)
+        if restore_result is True:
+            return jsonify({'success': False, 'message': f'退课后选课失败，已选回原课程: {error_msg}'})
+        return jsonify({
+            'success': False,
+            'message': f'退课后选课失败，且选回原课程失败: {error_msg}（选回失败原因: {error_text(restore_result)}）'
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'操作失败: {str(e)}'})
+
 @app.route('/selected_courses')
 @require_login
 def selected_courses():
