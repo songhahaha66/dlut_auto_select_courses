@@ -241,7 +241,7 @@
                 const response = await fetch('/selected_courses');
                 const data = await response.json();
                 if (data.success) {
-                    showDropCourses(data.courses, true);
+                    showDropCourses(data.courses);
                 } else {
                     alert('加载失败: ' + data.message);
                 }
@@ -250,7 +250,7 @@
             }
         }
 
-        function showDropCourses(courses, isSelected = false) {
+        function showDropCourses(courses) {
             const container = document.getElementById('drop_search_results');
             if (courses.length === 0) {
                 container.innerHTML = '<div class="text-center text-muted small py-2">未找到课程</div>';
@@ -279,13 +279,13 @@
             addLog(`📋 已设置先退课: ${courseName} (ID: ${courseId})`);
         }
 
-        function clearDropCourse() {
+        function clearDropCourse(silent = false) {
             dropCourseId = null;
             dropCourseName = '';
             document.getElementById('selected_drop_course').style.display = 'none';
             document.getElementById('drop_search_results').innerHTML = '';
             document.getElementById('drop_course_search').value = '';
-            addLog('📋 已取消先退课设置');
+            if (!silent) addLog('📋 已取消先退课设置');
         }
 
         async function loadCampuses() {
@@ -572,11 +572,11 @@
                     requestBody.schedule_group_id = monitorCourse.schedule_group_id;
                 }
 
-                // 判断是否需要先退课再选课
-                const enableDropFirst = document.getElementById('enableDropFirst').checked;
+                // 判断是否需要先退课再选课（固化到局部变量，避免请求期间界面变动导致状态错乱）
+                const useDropFirst = document.getElementById('enableDropFirst').checked && dropCourseId !== null;
                 let endpoint, actionDesc;
 
-                if (enableDropFirst && dropCourseId) {
+                if (useDropFirst) {
                     endpoint = '/auto_select_with_drop';
                     requestBody.drop_class_id = dropCourseId;
                     actionDesc = `先退 ${dropCourseName}(ID:${dropCourseId}) → 再选 ${courseName}`;
@@ -596,8 +596,10 @@
                 if (data.success) {
                     successCount++;
                     updateStats();
-                    if (enableDropFirst && dropCourseId) {
-                        addLog(`🎉 退课+选课成功: ${actionDesc}`);
+                    if (useDropFirst) {
+                        addLog(`🎉 ${courseName}: ${data.message}`);
+                        // 退课设置已被消耗，清除，避免后续课程再去退一门不存在的课
+                        clearDropCourse(true);
                     } else {
                         addLog(`🎉 自动选课成功: ${courseName}`);
                     }
