@@ -203,21 +203,88 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // 监控列表与运行状态均由服务端维护，切换页面或刷新都不会中断监控
         let monitorCourses = [];
         let isMonitoring = false;
-        let monitorInterval = null;
-        let logHistory = [];
         let checkCount = 0;
         let successCount = 0;
+        let logSeq = 0, logGeneration = null, logLines = [], lastListSignature = null;
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadCampuses();
-            loadCourseTypes();
-            loadCourseProperties();
-            loadAdminClasses();
-            updateMonitorList();
-            initLogDisplay();
+            Promise.all([loadCampuses(), loadCourseTypes(), loadCourseProperties(), loadAdminClasses()])
+                .then(restoreSearchFilters);
+            restoreSearchResults();
+            refreshStatus();
+            setInterval(refreshStatus, 1000);
         });
+
+        // ===== 服务端状态同步 =====
+
+        async function refreshStatus() {
+            try {
+                const response = await fetch(`/api/monitor/status?since=${logSeq}`);
+                const data = await response.json();
+                if (data.redirect) { window.location.href = data.redirect; return; }
+                if (!data.success) return;
+                applyStatus(data);
+            } catch (error) { /* 轮询失败时静默重试 */ }
+        }
+
+        function applyStatus(data) {
+            isMonitoring = data.running;
+            monitorCourses = data.courses;
+            checkCount = data.check_count;
+            successCount = data.success_count;
+
+            const signature = JSON.stringify(monitorCourses) + '|' + isMonitoring;
+            if (signature !== lastListSignature) {
+                lastListSignature = signature;
+                updateMonitorList();
+            }
+
+            if (isMonitoring) {
+                document.getElementById('interval').value = data.config.interval;
+                document.getElementById('autoSelect').checked = data.config.auto_select;
+            }
+            document.getElementById('interval').disabled = isMonitoring;
+            document.getElementById('autoSelect').disabled = isMonitoring;
+            document.getElementById('startBtn').disabled = isMonitoring;
+            document.getElementById('stopBtn').disabled = !isMonitoring;
+
+            updateLogs(data.log);
+            updateStats();
+        }
+
+        function updateLogs(log) {
+            if (logGeneration !== null && log.generation !== logGeneration) {
+                logLines = [];
+                logSeq = 0;
+            }
+            logGeneration = log.generation;
+            if (log.lines.length) {
+                logLines = logLines.concat(log.lines);
+                if (logLines.length > 200) logLines = logLines.slice(-200);
+            }
+            logSeq = log.seq;
+
+            const logDiv = document.getElementById('log_display');
+            const text = logLines.length ? logLines.join('\n') : '等待开始监控...';
+            if (logDiv.textContent !== text) {
+                const atBottom = logDiv.scrollTop + logDiv.clientHeight >= logDiv.scrollHeight - 20;
+                logDiv.textContent = text;
+                if (atBottom) logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        }
+
+        async function postJSON(url, body) {
+            const response = await fetch(url, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body || {})
+            });
+            const data = await response.json();
+            if (data.redirect) { window.location.href = data.redirect; return {success: false, message: '未登录'}; }
+            return data;
+        }
 
         async function loadCampuses() {
             try {
@@ -399,14 +466,10 @@
             });
             html += '</div>';
             container.innerHTML = html;
+            saveSearchState();
         }
 
-        function addToMonitor(courseId, courseName, courseCode, teachers, campus, capacity, hasMultipleGroups = false) {
-            if (monitorCourses.find(course => course.id === courseId)) {
-                alert('该课程已在监控列表中');
-                return;
-            }
-
+        async function addToMonitor(courseId, courseName, courseCode, teachers, campus, capacity, hasMultipleGroups = false) {
             let scheduleGroupId = null;
             // 从选课组选择器获取选中的ID（无论单个还是多个选课组）
             const selectElement = document.getElementById(`scheduleGroup_${courseId}`);
@@ -414,15 +477,13 @@
                 scheduleGroupId = parseInt(selectElement.value);
             }
 
-            monitorCourses.push({
+            const data = await postJSON('/api/monitor/courses/add', {
                 id: courseId, name: courseName, code: courseCode,
                 teachers: teachers, campus: campus, capacity: capacity,
-                selected: 0, available: 0, lastCheck: null,
                 schedule_group_id: scheduleGroupId
             });
-
-            updateMonitorList();
-            updateStats();
+            if (!data.success) { alert(data.message); return; }
+            refreshStatus();
         }
 
         function updateMonitorList() {
@@ -436,7 +497,7 @@
             let html = '<div class="list-group list-group-flush">';
             monitorCourses.forEach((course, index) => {
                 const hasAvailable = course.available > 0;
-                const statusText = course.lastCheck ? `${course.selected}/${course.capacity} (余量: ${course.available})` : '未检查';
+                const statusText = course.last_check ? `${course.selected}/${course.capacity} (余量: ${course.available}) @ ${course.last_check}` : '未检查';
                 const scheduleGroupText = course.schedule_group_id ? `<br><small class="text-info">选课组ID: ${course.schedule_group_id}</small>` : '';
 
                 html += `
@@ -460,141 +521,37 @@
             container.innerHTML = html;
         }
 
-        function removeFromMonitor(index) {
+        async function removeFromMonitor(index) {
             if (isMonitoring) return;
-            monitorCourses.splice(index, 1);
-            updateMonitorList();
-            updateStats();
+            const data = await postJSON('/api/monitor/courses/remove', {index: index});
+            if (!data.success) { alert(data.message); return; }
+            refreshStatus();
         }
 
-        function clearMonitorList() {
+        async function clearMonitorList() {
             if (isMonitoring) return;
-            monitorCourses = [];
-            updateMonitorList();
-            updateStats();
+            const data = await postJSON('/api/monitor/courses/clear');
+            if (!data.success) { alert(data.message); return; }
+            refreshStatus();
         }
 
-        function startMonitoring() {
+        async function startMonitoring() {
             if (monitorCourses.length === 0) {
                 alert('请先添加要监控的课程');
                 return;
             }
-            
-            isMonitoring = true;
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = false;
-            
-            addLog('🚀 开始监控课程余量...');
-            checkCourses();
+            const data = await postJSON('/api/monitor/start', {
+                interval: parseInt(document.getElementById('interval').value) || 1,
+                auto_select: document.getElementById('autoSelect').checked
+            });
+            if (!data.success) { alert(data.message); return; }
+            refreshStatus();
         }
 
-        function stopMonitoring() {
-            isMonitoring = false;
-            if (monitorInterval) {
-                clearTimeout(monitorInterval);
-                monitorInterval = null;
-            }
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-            
-            addLog('⏸️ 监控已停止');
-        }
-
-        async function checkCourses() {
-            if (!isMonitoring) return;
-            
-            try {
-                checkCount++;
-                updateStats();
-                
-                const courseIds = monitorCourses.map(course => course.id);
-                const response = await fetch('/check_course_availability', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({course_ids: courseIds})
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    monitorCourses.forEach(course => {
-                        course.lastCheck = new Date().toLocaleTimeString();
-                        const availableCourse = data.available_courses.find(ac => ac.id === course.id);
-                        if (availableCourse) {
-                            course.selected = availableCourse.selected;
-                            course.available = availableCourse.available;
-                        } else {
-                            course.available = 0;
-                        }
-                    });
-                    
-                    updateMonitorList();
-                    updateStats();
-                    
-                    if (data.available_courses.length > 0) {
-                        addLog(`🟢 发现 ${data.available_courses.length} 门课程有余量!`);
-                        
-                        if (document.getElementById('autoSelect').checked) {
-                            for (const course of data.available_courses) {
-                                addLog(`🎯 尝试自动选课: ${course.name}`);
-                                await attemptAutoSelect(course.id, course.name);
-                            }
-                        } else {
-                            data.available_courses.forEach(course => {
-                                addLog(`💡 ${course.name} 有 ${course.available} 个余量`);
-                            });
-                        }
-                    } else {
-                        addLog(`🔍 检查完成，暂无余量`);
-                    }
-                } else {
-                    addLog(`❌ 检查失败: ${data.message}`);
-                }
-                
-            } catch (error) {
-                addLog(`❌ 检查出错: ${error.message}`);
-            }
-            
-            if (isMonitoring) {
-                const interval = parseInt(document.getElementById('interval').value) * 1000;
-                monitorInterval = setTimeout(checkCourses, interval);
-            }
-        }
-
-        async function attemptAutoSelect(courseId, courseName) {
-            try {
-                // 查找监控课程以获取选课组ID
-                const monitorCourse = monitorCourses.find(course => course.id === courseId);
-                const requestBody = {class_id: courseId};
-
-                // 如果有选课组ID，添加到请求中
-                if (monitorCourse && monitorCourse.schedule_group_id) {
-                    requestBody.schedule_group_id = monitorCourse.schedule_group_id;
-                }
-
-                const response = await fetch('/select_course', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(requestBody)
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    successCount++;
-                    updateStats();
-                    addLog(`🎉 自动选课成功: ${courseName}`);
-
-                    const index = monitorCourses.findIndex(course => course.id === courseId);
-                    if (index !== -1) {
-                        monitorCourses.splice(index, 1);
-                        updateMonitorList();
-                        updateStats();
-                    }
-                } else {
-                    addLog(`❌ 自动选课失败: ${courseName} - ${data.message}`);
-                }
-            } catch (error) {
-                addLog(`❌ 自动选课出错: ${courseName} - ${error.message}`);
-            }
+        async function stopMonitoring() {
+            const data = await postJSON('/api/monitor/stop');
+            if (!data.success && data.message) alert(data.message);
+            refreshStatus();
         }
 
         function updateStats() {
@@ -605,24 +562,49 @@
             document.getElementById('successCount').textContent = successCount;
         }
 
-        function addLog(message) {
-            const timestamp = new Date().toLocaleTimeString();
-            logHistory.push(`[${timestamp}] ${message}`);
-            if (logHistory.length > 100) logHistory.shift();
-            
-            const logDiv = document.getElementById('log_display');
-            logDiv.textContent = logHistory.join('\n');
-            logDiv.scrollTop = logDiv.scrollHeight;
+        async function clearLogs() {
+            await postJSON('/api/monitor/logs/clear');
+            logLines = [];
+            logSeq = 0;
+            document.getElementById('log_display').textContent = '等待开始监控...';
+            refreshStatus();
         }
 
-        function initLogDisplay() {
-            logHistory = ['等待开始监控...'];
-            document.getElementById('log_display').textContent = logHistory.join('\n');
+        // ===== 搜索条件与结果本地缓存，切换页面回来不丢失 =====
+
+        const SEARCH_FIELDS = ['search_input', 'courseCode', 'className', 'teacherName',
+                               'campus_filter', 'courseTypeSelect', 'coursePropertySelect',
+                               'adminClassSelect', 'compulsorySelect'];
+
+        function saveSearchState() {
+            const filters = {};
+            SEARCH_FIELDS.forEach(id => { filters[id] = document.getElementById(id).value; });
+            filters.onlyAvailable = document.getElementById('onlyAvailable').checked;
+            try {
+                sessionStorage.setItem('monitor.search', JSON.stringify({
+                    filters: filters,
+                    html: document.getElementById('search_results').innerHTML
+                }));
+            } catch (error) { /* 存储不可用时忽略 */ }
         }
 
-        function clearLogs() {
-            logHistory = ['日志已清空'];
-            document.getElementById('log_display').textContent = logHistory.join('\n');
+        function readSearchState() {
+            try { return JSON.parse(sessionStorage.getItem('monitor.search')); } catch (error) { return null; }
+        }
+
+        function restoreSearchResults() {
+            const saved = readSearchState();
+            if (saved && saved.html) document.getElementById('search_results').innerHTML = saved.html;
+        }
+
+        // 下拉框选项是异步加载的，选项就绪后再恢复选中值
+        function restoreSearchFilters() {
+            const saved = readSearchState();
+            if (!saved) return;
+            SEARCH_FIELDS.forEach(id => {
+                if (saved.filters[id] !== undefined) document.getElementById(id).value = saved.filters[id];
+            });
+            document.getElementById('onlyAvailable').checked = !!saved.filters.onlyAvailable;
         }
 
         document.getElementById('search_input').addEventListener('keypress', e => {

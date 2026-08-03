@@ -208,12 +208,12 @@ def select_classes(cookies, stu_id, class_id, turn_id, schedule_group_id=None):
         url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/add-request"
         data = {"studentAssoc": stu_id, "courseSelectTurnAssoc": turn_id,
                 "requestMiddleDtos": [{"lessonAssoc": class_id, "virtualCost": 0, "scheduleGroupAssoc": schedule_group_id}]}
-        r1 = requests.post(url, json=data, cookies=cookies)
+        r1 = requests.post(url, json=data, cookies=cookies, timeout=15)
         uuid1 = r1.text
 
         url1 = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/add-drop-response"
         data1 = {"studentId": stu_id, "requestId": uuid1}
-        r2 = requests.post(url1, data=data1, cookies=cookies)
+        r2 = requests.post(url1, data=data1, cookies=cookies, timeout=15)
 
         if r2.status_code != 200:
             return {"error": f"HTTP错误: {r2.status_code}"}
@@ -235,12 +235,12 @@ def drop_classes(cookies, stu_id, class_id, turn_id):
         url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/drop-request"
         data = {"studentAssoc": stu_id, "lessonAssocs": [class_id],
                 "courseSelectTurnAssoc": turn_id, "coursePackAssoc": None}
-        r1 = requests.post(url, json=data, cookies=cookies)
+        r1 = requests.post(url, json=data, cookies=cookies, timeout=15)
         uuid1 = r1.text
         
         url1 = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/add-drop-response"
         data1 = {"studentId": stu_id, "requestId": uuid1}
-        r2 = requests.post(url1, data=data1, cookies=cookies)
+        r2 = requests.post(url1, data=data1, cookies=cookies, timeout=15)
         
         if r2.status_code != 200:
             return {"error": f"HTTP错误: {r2.status_code}"}
@@ -260,14 +260,14 @@ def get_selected_classes(cookies, stu_id, turn_id):
     """获取已选课程"""
     url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/selected-lessons"
     data = {"studentId": stu_id, "turnId": turn_id}
-    r = requests.post(url, data=data, cookies=cookies)
+    r = requests.post(url, data=data, cookies=cookies, timeout=15)
     return json.loads(r.text)
 
 def get_selected_numbers(cookies, lesson_ids):
     """获取选课人数"""
     url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/std-count"
     data = [("lessonIds[]", lid) for lid in lesson_ids]
-    r = requests.post(url, data=data, cookies=cookies)
+    r = requests.post(url, data=data, cookies=cookies, timeout=15)
     return json.loads(r.text)
 
 # ============ 路由 ============
@@ -313,6 +313,9 @@ def api_login():
             with open(get_ilist_path(), "w", encoding="utf-8") as f:
                 json.dump(ilist, f, ensure_ascii=False, indent=4)
         
+        # 换账号/重新登录时，上一轮遗留的队列与监控列表已失效
+        reset_background_tasks()
+
         # 保存登录状态
         login_state = {
             'logged_in': True,
@@ -381,6 +384,8 @@ def api_get_turns():
 def api_logout():
     """登出"""
     global login_state
+    # 先停掉后台任务，否则它们会继续拿着失效的 cookies 空转
+    reset_background_tasks()
     login_state = {
         'logged_in': False,
         'cookies': None,
@@ -801,52 +806,53 @@ def get_schedule_groups():
     except Exception as e:
         return jsonify({'success': False, 'message': f'获取选课组失败: {str(e)}'})
 
+def query_course_status(cookies, ilist, course_ids):
+    """查询课程的选课人数与余量，返回 {课程ID: {selected, capacity, available}}"""
+    selected_numbers = get_selected_numbers(cookies, course_ids)
+    if not isinstance(selected_numbers, dict):
+        selected_numbers = {}
+
+    course_map = {c['id']: c for c in ilist}
+    status = {}
+    for course_id in course_ids:
+        course_info = course_map.get(course_id)
+        if not course_info:
+            continue
+
+        selected_info = selected_numbers.get(str(course_id))
+        if isinstance(selected_info, str):
+            selected_count = int(selected_info.split('-')[0])
+        elif selected_info:
+            selected_count = int(selected_info)
+        else:
+            selected_count = 0
+
+        capacity = course_info['limitCount']
+        status[course_id] = {
+            'id': course_id,
+            'name': course_info['course']['nameZh'],
+            'code': course_info['code'],
+            'teachers': ', '.join([t['nameZh'] for t in course_info['teachers']]),
+            'campus': course_info.get('campus', {}).get('nameZh', '') if 'campus' in course_info else '',
+            'selected': selected_count,
+            'capacity': capacity,
+            'available': capacity - selected_count
+        }
+    return status
+
 @app.route('/check_course_availability', methods=['POST'])
 @require_login
 def check_course_availability():
     try:
         data = request.get_json()
         course_ids = data.get('course_ids', [])
-        
+
         if not course_ids:
             return jsonify({'success': False, 'message': '没有提供课程ID'})
-        
-        cookies = login_state['cookies']
-        ilist = login_state['ilist']
-        
-        selected_numbers = get_selected_numbers(cookies, course_ids)
-        
-        available_courses = []
-        for course_id in course_ids:
-            course_id_str = str(course_id)
-            if course_id_str in selected_numbers:
-                selected_info = selected_numbers[course_id_str]
-                selected_count = int(selected_info.split('-')[0])
-                
-                course_info = None
-                for course in ilist:
-                    if course['id'] == course_id:
-                        course_info = course
-                        break
-                
-                if course_info:
-                    capacity = course_info['limitCount']
-                    available_spots = capacity - selected_count
-                    
-                    if available_spots > 0:
-                        teachers = ', '.join([t['nameZh'] for t in course_info['teachers']])
-                        course_campus = course_info.get('campus', {}).get('nameZh', '') if 'campus' in course_info else ''
-                        available_courses.append({
-                            'id': course_id,
-                            'name': course_info['course']['nameZh'],
-                            'code': course_info['code'],
-                            'teachers': teachers,
-                            'campus': course_campus,
-                            'selected': selected_count,
-                            'capacity': capacity,
-                            'available': available_spots
-                        })
-        
+
+        status = query_course_status(login_state['cookies'], login_state['ilist'], course_ids)
+        available_courses = [s for s in status.values() if s['available'] > 0]
+
         return jsonify({
             'success': True,
             'available_courses': available_courses,
@@ -854,6 +860,563 @@ def check_course_availability():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': f'检查课程余量失败: {str(e)}'})
+
+# ============ 后台任务（抢课 / 监控）============
+# 任务跑在服务端线程里，页面只负责展示，切换页面或刷新都不会中断任务
+
+class TaskLog:
+    """线程安全的日志缓冲区，支持按序号增量拉取"""
+
+    def __init__(self, maxlen=500):
+        self._lock = threading.Lock()
+        self._entries = []   # [(seq, text)]
+        self._seq = 0
+        self._generation = 0
+        self._maxlen = maxlen
+
+    def add(self, message):
+        with self._lock:
+            self._seq += 1
+            self._entries.append((self._seq, f"[{time.strftime('%H:%M:%S')}] {message}"))
+            if len(self._entries) > self._maxlen:
+                del self._entries[:len(self._entries) - self._maxlen]
+
+    def read(self, since=0):
+        with self._lock:
+            if since < 0 or since > self._seq:
+                since = 0
+            return {
+                'generation': self._generation,
+                'seq': self._seq,
+                'lines': [text for seq, text in self._entries if seq > since]
+            }
+
+    def clear(self):
+        with self._lock:
+            self._entries = []
+            self._generation += 1
+
+
+class AutoSelectTask:
+    """自动抢课任务：按队列循环执行选课/退课，支持顺序与并发模式、定时启动"""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._thread = None
+        self.log = TaskLog()
+        self.operations = []
+        self.state = 'idle'          # idle / scheduled / running
+        self.schedule_at = None      # 预定启动时间（epoch 秒）
+        self.interval = 0
+        self.mode = 'sequential'
+        self.thread_count = 5
+        self.success_count = 0
+        self.round_count = 0
+
+    # ---- 队列管理（任务运行中不允许改动，与原前端行为一致）----
+
+    def add_operation(self, operation):
+        with self._lock:
+            if self.state != 'idle':
+                return False, '任务运行中，无法修改队列'
+            for op in self.operations:
+                if op['course_id'] == operation['course_id'] and op['type'] == operation['type']:
+                    return False, '该操作已存在'
+            self.operations.append(operation)
+            return True, ''
+
+    def remove_operation(self, index):
+        with self._lock:
+            if self.state != 'idle':
+                return False, '任务运行中，无法修改队列'
+            if 0 <= index < len(self.operations):
+                self.operations.pop(index)
+            return True, ''
+
+    def clear_operations(self):
+        with self._lock:
+            if self.state != 'idle':
+                return False, '任务运行中，无法修改队列'
+            self.operations = []
+            return True, ''
+
+    # ---- 启停 ----
+
+    def start(self, interval=0, mode='sequential', thread_count=5, schedule_at=None):
+        with self._lock:
+            if self.state != 'idle':
+                return False, '任务已在运行'
+            if not self.operations:
+                return False, '请先添加操作'
+
+            self.interval = max(0, int(interval or 0))
+            self.mode = 'parallel' if mode == 'parallel' else 'sequential'
+            self.thread_count = min(20, max(1, int(thread_count or 1)))
+            self.success_count = 0
+            self.round_count = 0
+
+            if schedule_at and schedule_at > time.time():
+                self.schedule_at = float(schedule_at)
+                self.state = 'scheduled'
+            else:
+                self.schedule_at = None
+                self.state = 'running'
+
+            stop_event = threading.Event()
+            self._stop_event = stop_event
+            self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True)
+            self._thread.start()
+            return True, ''
+
+    def stop(self):
+        with self._lock:
+            if self.state == 'idle':
+                return False, '任务未在运行'
+            self._stop_event.set()
+            return True, ''
+
+    def reset(self):
+        """登出/重新登录时：停止任务并清空队列与日志"""
+        self._stop_event.set()
+        thread = self._thread
+        if thread and thread.is_alive():
+            thread.join(timeout=5)
+        with self._lock:
+            self.state = 'idle'
+            self.schedule_at = None
+            self.operations = []
+        self.log.clear()
+
+    def status(self, since=0):
+        with self._lock:
+            return {
+                'state': self.state,
+                'schedule_at': self.schedule_at,
+                'server_time': time.time(),
+                'operations': list(self.operations),
+                'config': {
+                    'interval': self.interval,
+                    'mode': self.mode,
+                    'thread_count': self.thread_count
+                },
+                'success_count': self.success_count,
+                'round_count': self.round_count,
+                'log': self.log.read(since)
+            }
+
+    # ---- 执行 ----
+
+    def _run(self, stop_event):
+        try:
+            if self.schedule_at:
+                self.log.add(f"队列已预定，将在 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.schedule_at))} 启动")
+                while not stop_event.is_set():
+                    remaining = self.schedule_at - time.time()
+                    if remaining <= 0:
+                        break
+                    stop_event.wait(min(1.0, remaining))
+                if stop_event.is_set():
+                    return
+                with self._lock:
+                    self.state = 'running'
+                self.log.add('预定时间到达，开始执行队列...')
+
+            mode = self.mode
+            self.log.add(f"队列开始运行... ({'并发' if mode == 'parallel' else '顺序'}模式)")
+
+            if mode == 'parallel':
+                workers = [
+                    threading.Thread(target=self._worker_loop, args=(i + 1, stop_event), daemon=True)
+                    for i in range(self.thread_count)
+                ]
+                for worker in workers:
+                    worker.start()
+                for worker in workers:
+                    worker.join()
+            else:
+                self._worker_loop(None, stop_event)
+        except Exception as e:
+            self.log.add(f'❌ 任务异常终止: {str(e)}')
+        finally:
+            with self._lock:
+                stale = self._stop_event is not stop_event   # 已被新任务取代
+                if not stale:
+                    self.state = 'idle'
+                    self.schedule_at = None
+            if not stale:
+                self.log.add('队列已停止')
+
+    def _worker_loop(self, thread_id, stop_event):
+        prefix = f'线程{thread_id}: ' if thread_id else ''
+        while not stop_event.is_set():
+            with self._lock:
+                operations = list(self.operations)
+            if not operations:
+                self.log.add(f'{prefix}队列为空，停止执行')
+                stop_event.set()
+                break
+
+            for operation in operations:
+                if stop_event.is_set():
+                    break
+                self._execute(operation, prefix)
+                if thread_id and not stop_event.is_set():
+                    stop_event.wait(0.05)
+
+            if stop_event.is_set():
+                break
+            with self._lock:
+                self.round_count += 1
+            if self.interval > 0:
+                self.log.add(f'{prefix}一轮完成，等待 {self.interval} 秒后重新开始...')
+                stop_event.wait(self.interval)
+
+    def _execute(self, operation, prefix):
+        action = '选课' if operation['type'] == 'select' else '退课'
+        name = operation.get('course_name', '')
+        try:
+            if operation['type'] == 'select':
+                result = select_classes(
+                    login_state['cookies'], login_state['stu_id'],
+                    operation['course_id'], login_state['turn_id'],
+                    operation.get('schedule_group_id')
+                )
+            else:
+                result = drop_classes(
+                    login_state['cookies'], login_state['stu_id'],
+                    operation['course_id'], login_state['turn_id']
+                )
+
+            if result is True:
+                with self._lock:
+                    self.success_count += 1
+                self.log.add(f'{prefix}✅ 成功: {action} - {name}')
+            else:
+                message = result.get('error') if isinstance(result, dict) else str(result)
+                self.log.add(f'{prefix}❌ 失败: {action} - {name} - {message}')
+        except Exception as e:
+            self.log.add(f'{prefix}❌ 错误: {action} - {name} - {str(e)}')
+
+
+class MonitorTask:
+    """余量监控任务：轮询课程余量，可选自动抢课"""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._thread = None
+        self.log = TaskLog()
+        self.courses = []
+        self.running = False
+        self.interval = 5
+        self.auto_select = False
+        self.check_count = 0
+        self.success_count = 0
+
+    # ---- 监控列表 ----
+
+    def add_course(self, course):
+        with self._lock:
+            if self.running:
+                return False, '监控运行中，无法修改列表'
+            if any(c['id'] == course['id'] for c in self.courses):
+                return False, '该课程已在监控列表中'
+            course.update({'selected': 0, 'available': 0, 'last_check': None})
+            self.courses.append(course)
+            return True, ''
+
+    def remove_course(self, index):
+        with self._lock:
+            if self.running:
+                return False, '监控运行中，无法修改列表'
+            if 0 <= index < len(self.courses):
+                self.courses.pop(index)
+            return True, ''
+
+    def clear_courses(self):
+        with self._lock:
+            if self.running:
+                return False, '监控运行中，无法修改列表'
+            self.courses = []
+            return True, ''
+
+    # ---- 启停 ----
+
+    def start(self, interval=5, auto_select=False):
+        with self._lock:
+            if self.running:
+                return False, '监控已在运行'
+            if not self.courses:
+                return False, '请先添加要监控的课程'
+            self.interval = max(1, int(interval or 1))
+            self.auto_select = bool(auto_select)
+            self.check_count = 0
+            self.success_count = 0
+            self.running = True
+            stop_event = threading.Event()
+            self._stop_event = stop_event
+            self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True)
+            self._thread.start()
+            return True, ''
+
+    def stop(self):
+        with self._lock:
+            if not self.running:
+                return False, '监控未在运行'
+            self._stop_event.set()
+            return True, ''
+
+    def reset(self):
+        """登出/重新登录时：停止监控并清空列表与日志"""
+        self._stop_event.set()
+        thread = self._thread
+        if thread and thread.is_alive():
+            thread.join(timeout=5)
+        with self._lock:
+            self.running = False
+            self.courses = []
+        self.log.clear()
+
+    def status(self, since=0):
+        with self._lock:
+            return {
+                'running': self.running,
+                'courses': list(self.courses),
+                'config': {
+                    'interval': self.interval,
+                    'auto_select': self.auto_select
+                },
+                'check_count': self.check_count,
+                'success_count': self.success_count,
+                'log': self.log.read(since)
+            }
+
+    # ---- 执行 ----
+
+    def _run(self, stop_event):
+        self.log.add('🚀 开始监控课程余量...')
+        try:
+            while not stop_event.is_set():
+                self._check_once(stop_event)
+                if stop_event.is_set():
+                    break
+                stop_event.wait(self.interval)
+        except Exception as e:
+            self.log.add(f'❌ 监控异常终止: {str(e)}')
+        finally:
+            with self._lock:
+                stale = self._stop_event is not stop_event   # 已被新任务取代
+                if not stale:
+                    self.running = False
+            if not stale:
+                self.log.add('⏸️ 监控已停止')
+
+    def _check_once(self, stop_event):
+        with self._lock:
+            course_ids = [c['id'] for c in self.courses]
+        if not course_ids:
+            self.log.add('监控列表为空，停止监控')
+            stop_event.set()
+            return
+
+        with self._lock:
+            self.check_count += 1
+
+        try:
+            status = query_course_status(login_state['cookies'], login_state['ilist'], course_ids)
+        except Exception as e:
+            self.log.add(f'❌ 检查出错: {str(e)}')
+            return
+
+        timestamp = time.strftime('%H:%M:%S')
+        with self._lock:
+            for course in self.courses:
+                info = status.get(course['id'])
+                if info:
+                    course['selected'] = info['selected']
+                    course['available'] = info['available']
+                    course['capacity'] = info['capacity']
+                course['last_check'] = timestamp
+
+        available = [info for info in status.values() if info['available'] > 0]
+        if not available:
+            self.log.add('🔍 检查完成，暂无余量')
+            return
+
+        self.log.add(f'🟢 发现 {len(available)} 门课程有余量!')
+        if not self.auto_select:
+            for info in available:
+                self.log.add(f"💡 {info['name']} 有 {info['available']} 个余量")
+            return
+
+        for info in available:
+            if stop_event.is_set():
+                break
+            self._attempt_select(info, stop_event)
+
+    def _attempt_select(self, info, stop_event):
+        course_id = info['id']
+        name = info['name']
+        with self._lock:
+            monitored = next((c for c in self.courses if c['id'] == course_id), None)
+        schedule_group_id = monitored.get('schedule_group_id') if monitored else None
+
+        self.log.add(f'🎯 尝试自动选课: {name}')
+        try:
+            result = select_classes(
+                login_state['cookies'], login_state['stu_id'],
+                course_id, login_state['turn_id'], schedule_group_id
+            )
+            if result is True:
+                with self._lock:
+                    self.success_count += 1
+                    self.courses = [c for c in self.courses if c['id'] != course_id]
+                    remaining = len(self.courses)
+                self.log.add(f'🎉 自动选课成功: {name}')
+                if remaining == 0:
+                    self.log.add('监控列表已清空，停止监控')
+                    stop_event.set()
+            else:
+                message = result.get('error') if isinstance(result, dict) else str(result)
+                self.log.add(f'❌ 自动选课失败: {name} - {message}')
+        except Exception as e:
+            self.log.add(f'❌ 自动选课出错: {name} - {str(e)}')
+
+
+auto_select_task = AutoSelectTask()
+monitor_task = MonitorTask()
+
+
+def reset_background_tasks():
+    """停止并清空所有后台任务（登出、重新登录时调用）"""
+    auto_select_task.reset()
+    monitor_task.reset()
+
+
+# ============ 后台任务 API ============
+
+def _since_param():
+    try:
+        return int(request.args.get('since', 0))
+    except (TypeError, ValueError):
+        return 0
+
+@app.route('/api/auto_select/status')
+@require_login
+def api_auto_select_status():
+    return jsonify({'success': True, **auto_select_task.status(_since_param())})
+
+@app.route('/api/auto_select/operations/add', methods=['POST'])
+@require_login
+def api_auto_select_add():
+    data = request.get_json()
+    operation = {
+        'course_id': data.get('course_id'),
+        'type': data.get('type'),
+        'course_name': data.get('course_name', ''),
+        'schedule_group_id': data.get('schedule_group_id')
+    }
+    if operation['course_id'] is None or operation['type'] not in ('select', 'drop'):
+        return jsonify({'success': False, 'message': '参数错误'})
+    ok, message = auto_select_task.add_operation(operation)
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/auto_select/operations/remove', methods=['POST'])
+@require_login
+def api_auto_select_remove():
+    data = request.get_json()
+    ok, message = auto_select_task.remove_operation(int(data.get('index', -1)))
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/auto_select/operations/clear', methods=['POST'])
+@require_login
+def api_auto_select_clear():
+    ok, message = auto_select_task.clear_operations()
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/auto_select/start', methods=['POST'])
+@require_login
+def api_auto_select_start():
+    data = request.get_json() or {}
+    ok, message = auto_select_task.start(
+        interval=data.get('interval', 0),
+        mode=data.get('mode', 'sequential'),
+        thread_count=data.get('thread_count', 5),
+        schedule_at=data.get('schedule_at')
+    )
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/auto_select/stop', methods=['POST'])
+@require_login
+def api_auto_select_stop():
+    ok, message = auto_select_task.stop()
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/auto_select/logs/clear', methods=['POST'])
+@require_login
+def api_auto_select_clear_logs():
+    auto_select_task.log.clear()
+    return jsonify({'success': True})
+
+@app.route('/api/monitor/status')
+@require_login
+def api_monitor_status():
+    return jsonify({'success': True, **monitor_task.status(_since_param())})
+
+@app.route('/api/monitor/courses/add', methods=['POST'])
+@require_login
+def api_monitor_add():
+    data = request.get_json()
+    if data.get('id') is None:
+        return jsonify({'success': False, 'message': '参数错误'})
+    course = {
+        'id': data.get('id'),
+        'name': data.get('name', ''),
+        'code': data.get('code', ''),
+        'teachers': data.get('teachers', ''),
+        'campus': data.get('campus', ''),
+        'capacity': data.get('capacity', 0),
+        'schedule_group_id': data.get('schedule_group_id')
+    }
+    ok, message = monitor_task.add_course(course)
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/monitor/courses/remove', methods=['POST'])
+@require_login
+def api_monitor_remove():
+    data = request.get_json()
+    ok, message = monitor_task.remove_course(int(data.get('index', -1)))
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/monitor/courses/clear', methods=['POST'])
+@require_login
+def api_monitor_clear():
+    ok, message = monitor_task.clear_courses()
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/monitor/start', methods=['POST'])
+@require_login
+def api_monitor_start():
+    data = request.get_json() or {}
+    ok, message = monitor_task.start(
+        interval=data.get('interval', 5),
+        auto_select=data.get('auto_select', False)
+    )
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/monitor/stop', methods=['POST'])
+@require_login
+def api_monitor_stop():
+    ok, message = monitor_task.stop()
+    return jsonify({'success': ok, 'message': message})
+
+@app.route('/api/monitor/logs/clear', methods=['POST'])
+@require_login
+def api_monitor_clear_logs():
+    monitor_task.log.clear()
+    return jsonify({'success': True})
+
 
 def find_free_port(start_port=5001, max_attempts=10):
     """找到一个可用的端口"""

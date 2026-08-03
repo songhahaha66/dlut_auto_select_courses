@@ -118,6 +118,7 @@
                             <button class="btn btn-warning" onclick="stopQueue()" id="stopBtn" disabled><i class="bi bi-pause-fill"></i> 停止</button>
                             <button class="btn btn-outline-danger" onclick="clearOperations()"><i class="bi bi-trash"></i> 清空</button>
                         </div>
+                        <div id="countdown" class="alert alert-info py-2 px-3 mb-3 d-none"></div>
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label small">间隔 (秒)</label>
@@ -166,16 +167,112 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let operations = [], isRunning = false, currentIndex = 0, queueInterval = null, statusHistory = [], scheduleTimeout = null, isScheduled = false;
+        // 队列与运行状态均由服务端维护，页面只负责展示，切换页面/刷新不会中断任务
+        let taskState = 'idle', operations = [], scheduleAt = null, serverTimeOffset = 0;
+        let logSeq = 0, logGeneration = null, logLines = [], lastOperationsSignature = null;
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadCampuses(); loadCourseTypes(); loadCourseProperties(); loadAdminClasses();
-            updateOperationList(); initStatusDisplay(); updateCurrentTime();
+            Promise.all([loadCampuses(), loadCourseTypes(), loadCourseProperties(), loadAdminClasses()])
+                .then(restoreSearchFilters);
+            restoreSearchResults(); updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
             document.getElementById('concurrencyMode').addEventListener('change', function() {
                 document.getElementById('threadSettings').style.display = this.value === 'parallel' ? 'block' : 'none';
             });
+            refreshStatus();
+            setInterval(refreshStatus, 1000);
         });
+
+        // ===== 服务端状态同步 =====
+
+        async function refreshStatus() {
+            try {
+                const response = await fetch(`/api/auto_select/status?since=${logSeq}`);
+                const data = await response.json();
+                if (data.redirect) { window.location.href = data.redirect; return; }
+                if (!data.success) return;
+                applyStatus(data);
+            } catch (error) { /* 轮询失败时静默重试 */ }
+        }
+
+        function applyStatus(data) {
+            const previousState = taskState;
+            taskState = data.state;
+            operations = data.operations;
+            scheduleAt = data.schedule_at;
+            serverTimeOffset = data.server_time * 1000 - Date.now();
+
+            const signature = JSON.stringify(operations) + '|' + taskState;
+            if (signature !== lastOperationsSignature) {
+                lastOperationsSignature = signature;
+                updateOperationList();
+            }
+
+            // 任务运行中时，配置项以服务端为准并锁定
+            const running = taskState !== 'idle';
+            if (running) {
+                document.getElementById('interval').value = data.config.interval;
+                document.getElementById('concurrencyMode').value = data.config.mode;
+                document.getElementById('threadCount').value = data.config.thread_count;
+                document.getElementById('threadSettings').style.display = data.config.mode === 'parallel' ? 'block' : 'none';
+            }
+            ['interval', 'concurrencyMode', 'threadCount', 'enableSchedule', 'scheduleTime'].forEach(id => {
+                document.getElementById(id).disabled = running;
+            });
+            document.getElementById('startBtn').disabled = running;
+            document.getElementById('stopBtn').disabled = !running;
+
+            updateLogs(data.log);
+            updateCountdown();
+
+            if (previousState !== 'idle' && taskState === 'idle') {
+                document.getElementById('enableSchedule').checked = false;
+                document.getElementById('scheduleSettings').style.display = 'none';
+            }
+        }
+
+        function updateLogs(log) {
+            if (logGeneration !== null && log.generation !== logGeneration) {
+                logLines = [];
+                logSeq = 0;
+            }
+            logGeneration = log.generation;
+            if (log.lines.length) {
+                logLines = logLines.concat(log.lines);
+                if (logLines.length > 500) logLines = logLines.slice(-500);
+            }
+            logSeq = log.seq;
+
+            const statusDiv = document.getElementById('status_display');
+            const text = logLines.length ? logLines.join('\n') : '等待开始...';
+            if (statusDiv.textContent !== text) {
+                const atBottom = statusDiv.scrollTop + statusDiv.clientHeight >= statusDiv.scrollHeight - 20;
+                statusDiv.textContent = text;
+                if (atBottom) statusDiv.scrollTop = statusDiv.scrollHeight;
+            }
+        }
+
+        function updateCountdown() {
+            const el = document.getElementById('countdown');
+            if (taskState === 'scheduled' && scheduleAt) {
+                const remaining = Math.max(0, scheduleAt * 1000 - (Date.now() + serverTimeOffset));
+                const m = Math.floor(remaining / 60000), s = Math.floor((remaining % 60000) / 1000);
+                el.textContent = `倒计时: ${m}分${s}秒后启动队列`;
+                el.classList.remove('d-none');
+            } else {
+                el.classList.add('d-none');
+            }
+        }
+
+        async function postJSON(url, body) {
+            const response = await fetch(url, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body || {})
+            });
+            const data = await response.json();
+            if (data.redirect) { window.location.href = data.redirect; return {success: false, message: '未登录'}; }
+            return data;
+        }
 
         async function loadCampuses() {
             try {
@@ -340,11 +437,48 @@
             });
             html += '</div>';
             container.innerHTML = html;
+            saveSearchState();
         }
 
-        function addOperation(courseId, courseName, hasMultipleGroups = false) {
+        // ===== 搜索条件与结果本地缓存，切换页面回来不丢失 =====
+
+        const SEARCH_FIELDS = ['search_input', 'courseCode', 'className', 'teacherName',
+                               'campus_filter', 'courseTypeSelect', 'coursePropertySelect',
+                               'adminClassSelect', 'compulsorySelect'];
+
+        function saveSearchState() {
+            const filters = {};
+            SEARCH_FIELDS.forEach(id => { filters[id] = document.getElementById(id).value; });
+            filters.onlyAvailable = document.getElementById('onlyAvailable').checked;
+            try {
+                sessionStorage.setItem('autoSelect.search', JSON.stringify({
+                    filters: filters,
+                    html: document.getElementById('search_results').innerHTML
+                }));
+            } catch (error) { /* 存储不可用时忽略 */ }
+        }
+
+        function readSearchState() {
+            try { return JSON.parse(sessionStorage.getItem('autoSelect.search')); } catch (error) { return null; }
+        }
+
+        function restoreSearchResults() {
+            const saved = readSearchState();
+            if (saved && saved.html) document.getElementById('search_results').innerHTML = saved.html;
+        }
+
+        // 下拉框选项是异步加载的，选项就绪后再恢复选中值
+        function restoreSearchFilters() {
+            const saved = readSearchState();
+            if (!saved) return;
+            SEARCH_FIELDS.forEach(id => {
+                if (saved.filters[id] !== undefined) document.getElementById(id).value = saved.filters[id];
+            });
+            document.getElementById('onlyAvailable').checked = !!saved.filters.onlyAvailable;
+        }
+
+        async function addOperation(courseId, courseName, hasMultipleGroups = false) {
             const type = document.getElementById(`type_${courseId}`).value;
-            if (operations.find(op => op.course_id === courseId && op.type === type)) { alert('该操作已存在'); return; }
 
             let scheduleGroupId = null;
             if (type === 'select') {
@@ -355,8 +489,11 @@
                 }
             }
 
-            operations.push({ course_id: courseId, type: type, course_name: courseName, schedule_group_id: scheduleGroupId });
-            updateOperationList();
+            const data = await postJSON('/api/auto_select/operations/add', {
+                course_id: courseId, type: type, course_name: courseName, schedule_group_id: scheduleGroupId
+            });
+            if (!data.success) { alert(data.message); return; }
+            refreshStatus();
         }
 
         function updateOperationList() {
@@ -383,163 +520,71 @@
             html += '</div>';
             container.innerHTML = html;
             // 绑定删除按钮事件
+            const running = taskState !== 'idle';
             container.querySelectorAll('button[data-index]').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    if (isRunning) return;
+                btn.addEventListener('click', async function() {
+                    if (taskState !== 'idle') return;
                     const idx = parseInt(this.getAttribute('data-index'));
-                    operations.splice(idx, 1);
-                    updateOperationList();
+                    const data = await postJSON('/api/auto_select/operations/remove', {index: idx});
+                    if (!data.success) { alert(data.message); return; }
+                    refreshStatus();
                 });
-                btn.disabled = isRunning;
+                btn.disabled = running;
             });
         }
 
-        function clearOperations() { if (isRunning) return; operations = []; currentIndex = 0; updateOperationList(); }
+        async function clearOperations() {
+            if (taskState !== 'idle') return;
+            const data = await postJSON('/api/auto_select/operations/clear');
+            if (!data.success) { alert(data.message); return; }
+            refreshStatus();
+        }
 
-        function startQueue() {
+        async function startQueue() {
             if (operations.length === 0) { alert('请先添加操作'); return; }
-            const enableSchedule = document.getElementById('enableSchedule').checked;
-            if (enableSchedule) {
+
+            let scheduleAtSeconds = null;
+            if (document.getElementById('enableSchedule').checked) {
                 const scheduleTime = document.getElementById('scheduleTime').value;
                 if (!scheduleTime) { alert('请设置预定启动时间'); return; }
                 const scheduledDate = new Date(scheduleTime);
                 if (scheduledDate <= new Date()) { alert('预定时间必须大于当前时间'); return; }
-                startScheduledQueue(scheduledDate);
-            } else { startImmediateQueue(); }
-        }
-
-        function startImmediateQueue() {
-            isRunning = true; currentIndex = 0;
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = false;
-            const mode = document.getElementById('concurrencyMode').value;
-            updateStatus('队列开始运行... (' + (mode === 'parallel' ? '并发' : '顺序') + '模式)');
-            mode === 'parallel' ? executeParallel() : executeNext();
-        }
-
-        function startScheduledQueue(scheduledDate) {
-            isScheduled = true;
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = false;
-            updateStatus(`队列已预定，将在 ${scheduledDate.toLocaleString()} 启动`);
-            const countdownInterval = setInterval(() => {
-                const remaining = scheduledDate.getTime() - new Date().getTime();
-                if (remaining <= 0 || !isScheduled) { clearInterval(countdownInterval); return; }
-                const m = Math.floor(remaining / 60000), s = Math.floor((remaining % 60000) / 1000);
-                updateStatus(`倒计时: ${m}分${s}秒后启动队列...`);
-            }, 1000);
-            scheduleTimeout = setTimeout(() => {
-                if (isScheduled) { clearInterval(countdownInterval); updateStatus('预定时间到达，开始执行队列...'); isScheduled = false; startImmediateQueue(); }
-            }, scheduledDate.getTime() - new Date().getTime());
-        }
-
-        function stopQueue() {
-            isRunning = false; isScheduled = false;
-            if (queueInterval) { clearTimeout(queueInterval); queueInterval = null; }
-            if (scheduleTimeout) { clearTimeout(scheduleTimeout); scheduleTimeout = null; }
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-            updateStatus('队列已停止');
-        }
-
-        async function executeNext() {
-            if (!isRunning || currentIndex >= operations.length) {
-                currentIndex = 0; updateOperationList();
-                if (isRunning) {
-                    const interval = parseInt(document.getElementById('interval').value) * 1000;
-                    if (interval > 0) { updateStatus(`一轮完成，等待 ${interval/1000} 秒后重新开始...`); queueInterval = setTimeout(executeNext, interval); }
-                    else executeNext();
-                }
-                return;
+                scheduleAtSeconds = scheduledDate.getTime() / 1000;
             }
-            const operation = operations[currentIndex];
-            updateOperationList();
-            await executeOperation(operation, currentIndex);
-            currentIndex++;
-            if (isRunning) {
-                const interval = parseInt(document.getElementById('interval').value) * 1000;
-                interval > 0 ? queueInterval = setTimeout(executeNext, interval) : executeNext();
-            }
+
+            const data = await postJSON('/api/auto_select/start', {
+                interval: parseInt(document.getElementById('interval').value) || 0,
+                mode: document.getElementById('concurrencyMode').value,
+                thread_count: parseInt(document.getElementById('threadCount').value) || 1,
+                schedule_at: scheduleAtSeconds
+            });
+            if (!data.success) { alert(data.message); return; }
+            refreshStatus();
         }
 
-        async function executeParallel() {
-            if (!isRunning) return;
-            const threadCount = parseInt(document.getElementById('threadCount').value);
-            const tasks = [];
-            for (let i = 0; i < threadCount; i++) tasks.push(executeThread(i));
-            await Promise.all(tasks);
-            if (isRunning) {
-                const interval = parseInt(document.getElementById('interval').value) * 1000;
-                if (interval > 0) { updateStatus(`所有线程完成一轮，等待 ${interval/1000} 秒后重新开始...`); queueInterval = setTimeout(executeParallel, interval); }
-                else executeParallel();
-            }
+        async function stopQueue() {
+            const data = await postJSON('/api/auto_select/stop');
+            if (!data.success && data.message) alert(data.message);
+            refreshStatus();
         }
 
-        async function executeThread(threadId) {
-            while (isRunning) {
-                for (let i = 0; i < operations.length && isRunning; i++) {
-                    const operation = operations[i];
-                    updateStatus(`线程${threadId + 1}: 正在执行 ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name}`);
-                    await executeOperation(operation, i, threadId + 1);
-                    if (isRunning) await new Promise(resolve => setTimeout(resolve, 50));
-                }
-                const interval = parseInt(document.getElementById('interval').value) * 1000;
-                if (interval > 0 && isRunning) {
-                    updateStatus(`线程${threadId + 1}: 一轮完成，等待 ${interval/1000} 秒...`);
-                    await new Promise(resolve => setTimeout(resolve, interval));
-                }
-            }
-        }
-
-        async function executeOperation(operation, index, threadId = null) {
-            try {
-                const threadPrefix = threadId ? `线程${threadId}: ` : '';
-                const endpoint = operation.type === 'select' ? '/select_course' : '/drop_course';
-                const requestBody = {class_id: operation.course_id};
-
-                // 如果是选课且有选课组ID，添加到请求中
-                if (operation.type === 'select' && operation.schedule_group_id) {
-                    requestBody.schedule_group_id = operation.schedule_group_id;
-                }
-
-                const response = await fetch(endpoint, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(requestBody)
-                });
-                const data = await response.json();
-                const action = operation.type === 'select' ? '选课' : '退课';
-                if (data.success) updateStatus(`${threadPrefix}✅ 成功: ${action} - ${operation.course_name}`);
-                else updateStatus(`${threadPrefix}❌ 失败: ${action} - ${operation.course_name} - ${data.message}`);
-            } catch (error) {
-                const threadPrefix = threadId ? `线程${threadId}: ` : '';
-                updateStatus(`${threadPrefix}❌ 错误: ${operation.type === 'select' ? '选课' : '退课'} - ${operation.course_name} - ${error.message}`);
-            }
-        }
-
-        function updateStatus(message) {
-            const timestamp = new Date().toLocaleTimeString();
-            statusHistory.push(`[${timestamp}] ${message}`);
-            const statusDiv = document.getElementById('status_display');
-            statusDiv.textContent = statusHistory.join('\n');
-            statusDiv.scrollTop = statusDiv.scrollHeight;
-        }
-
-        function initStatusDisplay() {
-            statusHistory = ['等待开始...'];
-            document.getElementById('status_display').textContent = statusHistory.join('\n');
-        }
-
-        function clearHistory() {
-            statusHistory = ['历史已清空'];
-            document.getElementById('status_display').textContent = statusHistory.join('\n');
+        async function clearHistory() {
+            await postJSON('/api/auto_select/logs/clear');
+            logLines = [];
+            logSeq = 0;
+            document.getElementById('status_display').textContent = '等待开始...';
+            refreshStatus();
         }
 
         function toggleSchedule() {
             const enabled = document.getElementById('enableSchedule').checked;
             document.getElementById('scheduleSettings').style.display = enabled ? 'block' : 'none';
             if (enabled) {
-                const now = new Date(); now.setMinutes(now.getMinutes() + 1); now.setHours(now.getHours() + 8);
-                document.getElementById('scheduleTime').value = now.toISOString().slice(0, 16);
+                // 用本地时间填充 datetime-local（不能用 toISOString，那是 UTC）
+                const now = new Date(Date.now() + 60000);
+                const pad = n => String(n).padStart(2, '0');
+                document.getElementById('scheduleTime').value =
+                    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
             }
         }
 
