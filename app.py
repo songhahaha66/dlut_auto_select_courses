@@ -256,6 +256,41 @@ def drop_classes(cookies, stu_id, class_id, turn_id):
     except Exception as e:
         return {"error": f"退课请求异常: {str(e)}"}
 
+def _result_error_text(result):
+    return str(result.get('error', result)) if isinstance(result, dict) else str(result)
+
+def select_classes_with_drop(cookies, stu_id, class_id, turn_id, drop_class_id, schedule_group_id=None):
+    """先退课再选课。退课失败不中断；选课失败且已退课时尝试选回原课。
+    返回 (success: bool, message: str)
+    """
+    if not class_id:
+        return False, '缺少目标课程ID'
+    if not drop_class_id:
+        return False, '缺少要退的课程ID'
+    if str(class_id) == str(drop_class_id):
+        return False, '要退的课程与目标课程相同'
+
+    drop_result = drop_classes(cookies, stu_id, drop_class_id, turn_id)
+    dropped = drop_result is True
+
+    select_result = select_classes(cookies, stu_id, class_id, turn_id, schedule_group_id)
+    if select_result is True:
+        if dropped:
+            return True, '退课并选课成功'
+        return True, f'选课成功（退课未执行: {_result_error_text(drop_result)}）'
+
+    error_msg = _result_error_text(select_result)
+    if not dropped:
+        return False, f'选课失败: {error_msg}'
+
+    restore_result = select_classes(cookies, stu_id, drop_class_id, turn_id)
+    if restore_result is True:
+        return False, f'退课后选课失败，已选回原课程: {error_msg}'
+    return False, (
+        f'退课后选课失败，且选回原课程失败: {error_msg}'
+        f'（选回失败原因: {_result_error_text(restore_result)}）'
+    )
+
 def get_selected_classes(cookies, stu_id, turn_id):
     """获取已选课程"""
     url = "http://jxgl.dlut.edu.cn/student/ws/for-std/course-select/selected-lessons"
@@ -619,6 +654,24 @@ def drop_course_route():
             return jsonify({'success': False, 'message': error_msg})
     except Exception as e:
         return jsonify({'success': False, 'message': f'退课失败: {str(e)}'})
+
+@app.route('/auto_select_with_drop', methods=['POST'])
+@require_login
+def auto_select_with_drop_route():
+    """自动选课前先退课：退课失败不中断（课可能本来就没选），选课失败时尝试选回原课程"""
+    try:
+        data = request.get_json() or {}
+        success, message = select_classes_with_drop(
+            login_state['cookies'],
+            login_state['stu_id'],
+            data.get('class_id'),
+            login_state['turn_id'],
+            data.get('drop_class_id'),
+            data.get('schedule_group_id')
+        )
+        return jsonify({'success': success, 'message': message})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'操作失败: {str(e)}'})
 
 @app.route('/selected_courses')
 @require_login
@@ -1111,6 +1164,8 @@ class MonitorTask:
         self.running = False
         self.interval = 5
         self.auto_select = False
+        self.drop_class_id = None
+        self.drop_class_name = ''
         self.check_count = 0
         self.success_count = 0
 
@@ -1143,17 +1198,23 @@ class MonitorTask:
 
     # ---- 启停 ----
 
-    def start(self, interval=5, auto_select=False):
+    def start(self, interval=5, auto_select=False, drop_class_id=None, drop_class_name=''):
         with self._lock:
             if self.running:
                 return False, '监控已在运行'
             if not self.courses:
                 return False, '请先添加要监控的课程'
+            if drop_class_id and any(str(c['id']) == str(drop_class_id) for c in self.courses):
+                return False, '要退的课程与监控目标相同'
             self.interval = max(1, int(interval or 1))
             self.auto_select = bool(auto_select)
+            self.drop_class_id = drop_class_id
+            self.drop_class_name = drop_class_name or ''
             self.check_count = 0
             self.success_count = 0
             self.running = True
+            if self.drop_class_id:
+                self.log.add(f'📋 已设置先退课: {self.drop_class_name} (ID: {self.drop_class_id})')
             stop_event = threading.Event()
             self._stop_event = stop_event
             self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True)
@@ -1176,6 +1237,8 @@ class MonitorTask:
         with self._lock:
             self.running = False
             self.courses = []
+            self.drop_class_id = None
+            self.drop_class_name = ''
         self.log.clear()
 
     def status(self, since=0):
@@ -1185,7 +1248,9 @@ class MonitorTask:
                 'courses': list(self.courses),
                 'config': {
                     'interval': self.interval,
-                    'auto_select': self.auto_select
+                    'auto_select': self.auto_select,
+                    'drop_class_id': self.drop_class_id,
+                    'drop_class_name': self.drop_class_name
                 },
                 'check_count': self.check_count,
                 'success_count': self.success_count,
@@ -1216,7 +1281,7 @@ class MonitorTask:
         with self._lock:
             course_ids = [c['id'] for c in self.courses]
         if not course_ids:
-            self.log.add('监控列表为空，停止监控')
+            self.log.add('✅ 没有待监控课程，已自动停止')
             stop_event.set()
             return
 
@@ -1260,25 +1325,41 @@ class MonitorTask:
         name = info['name']
         with self._lock:
             monitored = next((c for c in self.courses if c['id'] == course_id), None)
+            drop_class_id = self.drop_class_id
+            drop_class_name = self.drop_class_name
         schedule_group_id = monitored.get('schedule_group_id') if monitored else None
 
         self.log.add(f'🎯 尝试自动选课: {name}')
         try:
-            result = select_classes(
-                login_state['cookies'], login_state['stu_id'],
-                course_id, login_state['turn_id'], schedule_group_id
-            )
-            if result is True:
+            if drop_class_id is not None:
+                self.log.add(f'🔄 先退 {drop_class_name}(ID:{drop_class_id}) → 再选 {name}')
+                success, message = select_classes_with_drop(
+                    login_state['cookies'], login_state['stu_id'],
+                    course_id, login_state['turn_id'], drop_class_id, schedule_group_id
+                )
+            else:
+                result = select_classes(
+                    login_state['cookies'], login_state['stu_id'],
+                    course_id, login_state['turn_id'], schedule_group_id
+                )
+                success = result is True
+                message = '自动选课成功' if success else (
+                    result.get('error') if isinstance(result, dict) else str(result)
+                )
+
+            if success:
                 with self._lock:
                     self.success_count += 1
                     self.courses = [c for c in self.courses if c['id'] != course_id]
                     remaining = len(self.courses)
-                self.log.add(f'🎉 自动选课成功: {name}')
+                    if drop_class_id is not None:
+                        self.drop_class_id = None
+                        self.drop_class_name = ''
+                self.log.add(f'🎉 {name}: {message}' if drop_class_id is not None else f'🎉 自动选课成功: {name}')
                 if remaining == 0:
-                    self.log.add('监控列表已清空，停止监控')
+                    self.log.add('✅ 监控课程已全部选上，自动停止')
                     stop_event.set()
             else:
-                message = result.get('error') if isinstance(result, dict) else str(result)
                 self.log.add(f'❌ 自动选课失败: {name} - {message}')
         except Exception as e:
             self.log.add(f'❌ 自动选课出错: {name} - {str(e)}')
@@ -1401,7 +1482,9 @@ def api_monitor_start():
     data = request.get_json() or {}
     ok, message = monitor_task.start(
         interval=data.get('interval', 5),
-        auto_select=data.get('auto_select', False)
+        auto_select=data.get('auto_select', False),
+        drop_class_id=data.get('drop_class_id'),
+        drop_class_name=data.get('drop_class_name', '')
     )
     return jsonify({'success': ok, 'message': message})
 

@@ -175,6 +175,42 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 先退课再选课配置 -->
+                        <div class="card bg-light mb-3 border">
+                            <div class="card-body py-2 px-3">
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" id="enableDropFirst" onchange="toggleDropFirst()">
+                                    <label class="form-check-label fw-bold" for="enableDropFirst">
+                                        <i class="bi bi-arrow-repeat text-warning"></i> 自动选课前先退课
+                                    </label>
+                                </div>
+                                <div id="dropFirstSettings" style="display: none;">
+                                    <div class="input-group input-group-sm mt-2">
+                                        <input type="text" class="form-control" id="drop_course_search" placeholder="在已选课程中搜索...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="searchDropCourse()">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info" type="button" onclick="searchDropCourse()" title="刷新已选课程">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
+                                    </div>
+                                    <div id="drop_search_results" class="mt-1" style="max-height: 150px; overflow-y: auto;"></div>
+                                    <div id="selected_drop_course" class="mt-2" style="display: none;">
+                                        <div class="d-flex justify-content-between align-items-center bg-warning bg-opacity-10 rounded p-2">
+                                            <div>
+                                                <small class="text-muted">将先退课:</small>
+                                                <strong id="drop_course_name" class="ms-1"></strong>
+                                                <br><small class="text-muted" id="drop_course_info"></small>
+                                            </div>
+                                            <button class="btn btn-outline-danger btn-sm" onclick="clearDropCourse()">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         
                         <div id="monitor_list" style="max-height: 300px; overflow-y: auto;">
                             <div class="text-center text-muted py-4">
@@ -209,6 +245,9 @@
         let checkCount = 0;
         let successCount = 0;
         let logSeq = 0, logGeneration = null, logLines = [], lastListSignature = null;
+        let dropCourseId = null;
+        let dropCourseName = '';
+        let dropCourseInfo = '';
 
         document.addEventListener('DOMContentLoaded', function() {
             Promise.all([loadCampuses(), loadCourseTypes(), loadCourseProperties(), loadAdminClasses()])
@@ -245,11 +284,13 @@
             if (isMonitoring) {
                 document.getElementById('interval').value = data.config.interval;
                 document.getElementById('autoSelect').checked = data.config.auto_select;
+                syncDropFirstFromConfig(data.config);
             }
             document.getElementById('interval').disabled = isMonitoring;
             document.getElementById('autoSelect').disabled = isMonitoring;
             document.getElementById('startBtn').disabled = isMonitoring;
             document.getElementById('stopBtn').disabled = !isMonitoring;
+            setDropFirstControlsDisabled(isMonitoring);
 
             updateLogs(data.log);
             updateStats();
@@ -284,6 +325,104 @@
             const data = await response.json();
             if (data.redirect) { window.location.href = data.redirect; return {success: false, message: '未登录'}; }
             return data;
+        }
+
+        function toggleDropFirst() {
+            const enabled = document.getElementById('enableDropFirst').checked;
+            document.getElementById('dropFirstSettings').style.display = enabled ? 'block' : 'none';
+            if (!enabled) {
+                clearDropCourse();
+            } else {
+                searchDropCourse();
+            }
+        }
+
+        async function searchDropCourse() {
+            try {
+                const response = await fetch('/selected_courses');
+                const data = await response.json();
+                if (data.redirect) { window.location.href = data.redirect; return; }
+                if (!data.success) {
+                    alert('加载已选课程失败: ' + data.message);
+                    return;
+                }
+                const keyword = document.getElementById('drop_course_search').value.trim().toLowerCase();
+                const courses = (data.courses || []).filter(course => {
+                    if (!keyword) return true;
+                    const haystack = [course.name, course.className, course.code, course.teachers, course.campus]
+                        .filter(Boolean)
+                        .join(' ')
+                        .toLowerCase();
+                    return haystack.includes(keyword);
+                });
+                showDropCourses(courses, keyword);
+            } catch (error) {
+                alert('搜索出错: ' + error.message);
+            }
+        }
+
+        function showDropCourses(courses, keyword = '') {
+            const container = document.getElementById('drop_search_results');
+            if (courses.length === 0) {
+                const emptyText = keyword ? '已选课程中未找到匹配项' : '当前没有已选课程';
+                container.innerHTML = `<div class="text-center text-muted small py-2">${emptyText}</div>`;
+                return;
+            }
+            let html = '<div class="list-group list-group-flush">';
+            courses.forEach(course => {
+                html += `
+                    <div class="list-group-item list-group-item-action py-1 px-2" style="cursor:pointer;" onclick="selectDropCourse(${course.id}, '${course.name.replace(/'/g, "\\'")}', '${course.code || ''}', '${(course.teachers || '').replace(/'/g, "\\'")}')">
+                        <small><strong>${course.name}</strong> <span class="text-muted">${course.code || ''}</span></small>
+                        <br><small class="text-muted">ID: ${course.id} | ${course.teachers || ''} | ${course.campus || ''}</small>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function selectDropCourse(courseId, courseName, courseCode, teachers) {
+            dropCourseId = courseId;
+            dropCourseName = courseName;
+            dropCourseInfo = `ID: ${courseId} | ${teachers} | ${courseCode}`;
+            document.getElementById('drop_search_results').innerHTML = '';
+            renderSelectedDropCourse();
+        }
+
+        function clearDropCourse() {
+            dropCourseId = null;
+            dropCourseName = '';
+            dropCourseInfo = '';
+            document.getElementById('drop_search_results').innerHTML = '';
+            document.getElementById('drop_course_search').value = '';
+            renderSelectedDropCourse();
+        }
+
+        function renderSelectedDropCourse() {
+            const box = document.getElementById('selected_drop_course');
+            if (!dropCourseId) {
+                box.style.display = 'none';
+                return;
+            }
+            box.style.display = 'block';
+            document.getElementById('drop_course_name').textContent = dropCourseName;
+            document.getElementById('drop_course_info').textContent = dropCourseInfo || `ID: ${dropCourseId}`;
+        }
+
+        function syncDropFirstFromConfig(config) {
+            const enabled = !!config.drop_class_id;
+            document.getElementById('enableDropFirst').checked = enabled;
+            document.getElementById('dropFirstSettings').style.display = enabled ? 'block' : 'none';
+            dropCourseId = config.drop_class_id || null;
+            dropCourseName = config.drop_class_name || '';
+            dropCourseInfo = dropCourseId ? `ID: ${dropCourseId}` : '';
+            renderSelectedDropCourse();
+        }
+
+        function setDropFirstControlsDisabled(disabled) {
+            document.getElementById('enableDropFirst').disabled = disabled;
+            document.getElementById('drop_course_search').disabled = disabled;
+            document.querySelectorAll('#dropFirstSettings button').forEach(btn => { btn.disabled = disabled; });
         }
 
         async function loadCampuses() {
@@ -540,10 +679,19 @@
                 alert('请先添加要监控的课程');
                 return;
             }
-            const data = await postJSON('/api/monitor/start', {
+            const payload = {
                 interval: parseInt(document.getElementById('interval').value) || 1,
                 auto_select: document.getElementById('autoSelect').checked
-            });
+            };
+            if (document.getElementById('enableDropFirst').checked) {
+                if (!dropCourseId) {
+                    alert('请选择要先退的已选课程');
+                    return;
+                }
+                payload.drop_class_id = dropCourseId;
+                payload.drop_class_name = dropCourseName;
+            }
+            const data = await postJSON('/api/monitor/start', payload);
             if (!data.success) { alert(data.message); return; }
             refreshStatus();
         }
@@ -609,6 +757,9 @@
 
         document.getElementById('search_input').addEventListener('keypress', e => {
             if (e.key === 'Enter') searchCourses();
+        });
+        document.getElementById('drop_course_search').addEventListener('keypress', e => {
+            if (e.key === 'Enter') searchDropCourse();
         });
     </script>
 </body>
