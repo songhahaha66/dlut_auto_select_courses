@@ -1,0 +1,11 @@
+[project]
+name = "dlut-auto-select-courses"
+version = "1.1.0"
+description = "大连理工大学自动选课/抢课脚本"
+readme = "readme.md"
+requires-python = ">=3.11"
+dependencies = [
+    "flask",
+    "pyinstaller",
+    "requests",
+]
